@@ -290,3 +290,9 @@ This project demonstrates:
 •	Document Processing
 •	Software Architecture
 •	Problem Solving for Real-World Users
+
+## Future Translation Expansion
+
+The MVP focuses on English-to-Uyghur translation while preserving Arabic grammar terms and Quranic Arabic examples.
+
+In a future version, the system will support Arabic-to-Uyghur translation for Arabic study materials. This will allow users to upload Arabic textbooks, lessons, or notes and translate explanatory Arabic content into Uyghur while preserving important Quranic examples and grammar terms where needed.
