@@ -1,7 +1,25 @@
+import { NavLink, Route, Routes } from 'react-router-dom'
+import Dashboard from './pages/Dashboard'
+import Upload from './pages/Upload'
+import Documents from './pages/Documents'
+import Translation from './pages/Translation'
+import ReviewEdit from './pages/ReviewEdit'
+import Export from './pages/Export'
+import Glossary from './pages/Glossary'
+
 function App() {
+  const navItems = [
+    { name: 'Dashboard', path: '/' },
+    { name: 'Upload', path: '/upload' },
+    { name: 'Documents', path: '/documents' },
+    { name: 'Translation', path: '/translation' },
+    { name: 'Review and Edit', path: '/review-edit' },
+    { name: 'Export', path: '/export' },
+    { name: 'Glossary', path: '/glossary' },
+  ]
+
   return (
     <div className="min-h-screen bg-blue-50 text-slate-900">
-      {/* Top Navigation */}
       <header className="h-12 bg-blue-600 text-white flex items-center px-6">
         <h1 className="font-semibold text-lg">
           Smart Study Assistant & Uyghur Translator
@@ -9,88 +27,34 @@ function App() {
       </header>
 
       <div className="flex">
-        {/* Sidebar */}
         <aside className="w-56 min-h-[calc(100vh-3rem)] bg-blue-400 text-slate-900">
           <nav className="flex flex-col">
-            <a className="px-6 py-4 border-b border-blue-300 font-medium" href="#">
-              Dashboard
-            </a>
-            <a className="px-6 py-4 border-b border-blue-300 font-medium" href="#">
-              Upload
-            </a>
-            <a className="px-6 py-4 border-b border-blue-300 font-medium" href="#">
-              Documents
-            </a>
-            <a className="px-6 py-4 border-b border-blue-300 font-medium" href="#">
-              Translation
-            </a>
-            <a className="px-6 py-4 border-b border-blue-300 font-medium" href="#">
-              Review and Edit
-            </a>
-            <a className="px-6 py-4 border-b border-blue-300 font-medium" href="#">
-              Export
-            </a>
-            <a className="px-6 py-4 border-b border-blue-300 font-medium" href="#">
-              Glossary
-            </a>
+            {navItems.map((item) => (
+              <NavLink
+                key={item.path}
+                to={item.path}
+                className={({ isActive }) =>
+                  `px-6 py-4 border-b border-blue-300 font-medium ${
+                    isActive ? 'bg-blue-600 text-white' : 'hover:bg-blue-300'
+                  }`
+                }
+              >
+                {item.name}
+              </NavLink>
+            ))}
           </nav>
         </aside>
 
-        {/* Main Content */}
         <main className="flex-1 p-10">
-          <section className="max-w-5xl mx-auto">
-            <h2 className="text-4xl font-bold text-center text-slate-800 mb-4">
-              Smart Study Assistant
-            </h2>
-            <p className="text-center text-slate-600 mb-12">
-              Translate Quranic Arabic learning materials into Uyghur while
-              preserving Arabic terms and Quranic examples.
-            </p>
-
-            <div className="grid grid-cols-3 gap-8">
-              <div className="bg-white rounded-xl shadow p-8 text-center">
-                <h3 className="font-semibold text-lg">Dashboard</h3>
-                <p className="text-sm text-slate-500 mt-2">
-                  View project progress and recent documents.
-                </p>
-              </div>
-
-              <div className="bg-white rounded-xl shadow p-8 text-center">
-                <h3 className="font-semibold text-lg">Upload Documents</h3>
-                <p className="text-sm text-slate-500 mt-2">
-                  Upload PDF or DOCX textbooks for translation.
-                </p>
-              </div>
-
-              <div className="bg-white rounded-xl shadow p-8 text-center">
-                <h3 className="font-semibold text-lg">Document Details</h3>
-                <p className="text-sm text-slate-500 mt-2">
-                  View chapters, pages, and preservation settings.
-                </p>
-              </div>
-
-              <div className="bg-white rounded-xl shadow p-8 text-center">
-                <h3 className="font-semibold text-lg">Translation</h3>
-                <p className="text-sm text-slate-500 mt-2">
-                  Translate English or Arabic content into Uyghur.
-                </p>
-              </div>
-
-              <div className="bg-white rounded-xl shadow p-8 text-center">
-                <h3 className="font-semibold text-lg">Review and Edit</h3>
-                <p className="text-sm text-slate-500 mt-2">
-                  Review translation and correct Uyghur text.
-                </p>
-              </div>
-
-              <div className="bg-white rounded-xl shadow p-8 text-center">
-                <h3 className="font-semibold text-lg">Export</h3>
-                <p className="text-sm text-slate-500 mt-2">
-                  Export reviewed translation as DOCX or PDF.
-                </p>
-              </div>
-            </div>
-          </section>
+          <Routes>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/upload" element={<Upload />} />
+            <Route path="/documents" element={<Documents />} />
+            <Route path="/translation" element={<Translation />} />
+            <Route path="/review-edit" element={<ReviewEdit />} />
+            <Route path="/export" element={<Export />} />
+            <Route path="/glossary" element={<Glossary />} />
+          </Routes>
         </main>
       </div>
     </div>
