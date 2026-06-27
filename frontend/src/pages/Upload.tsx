@@ -1,23 +1,7 @@
 import { useState } from 'react'
 
-type ExtractedPage = {
-  page_number: number
-  text: string
-}
 
-type UploadResponse = {
-  message: string
-  document_title: string
-  filename: string
-  source_language: string
-  target_language: string
-  preserve_arabic_terms: boolean
-  preserve_quranic_examples: boolean
-  page_count: number
-  pages: ExtractedPage[]
-  text_preview: string
-  character_count: number
-}
+import type { UploadedDocument } from '../types/document'
 
 function Upload() {
   const [documentTitle, setDocumentTitle] = useState('')
@@ -25,7 +9,7 @@ function Upload() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [uploadStatus, setUploadStatus] = useState('')
   const [isUploading, setIsUploading] = useState(false)
-  const [uploadResult, setUploadResult] = useState<UploadResponse | null>(null)
+  const [uploadResult, setUploadResult] = useState<UploadedDocument | null>(null)
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -80,8 +64,9 @@ function Upload() {
         throw new Error('Upload failed.')
       }
 
-      const data: UploadResponse = await response.json()
-
+      const data: UploadedDocument = await response.json()
+      localStorage.setItem('uploadedDocument', JSON.stringify(data))
+      
       setUploadResult(data)
       setUploadStatus('Document uploaded and processed successfully.')
     } catch (error) {
