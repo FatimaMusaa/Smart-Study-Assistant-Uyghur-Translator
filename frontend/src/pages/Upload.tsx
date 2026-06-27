@@ -1,5 +1,10 @@
 import { useState } from 'react'
 
+type ExtractedPage = {
+  page_number: number
+  text: string
+}
+
 type UploadResponse = {
   message: string
   document_title: string
@@ -8,6 +13,8 @@ type UploadResponse = {
   target_language: string
   preserve_arabic_terms: boolean
   preserve_quranic_examples: boolean
+  page_count: number
+  pages: ExtractedPage[]
   text_preview: string
   character_count: number
 }
@@ -212,13 +219,24 @@ function Upload() {
               <strong>Filename:</strong> {uploadResult.filename}
             </p>
             <p>
+              <strong>Page Count:</strong> {uploadResult.page_count}
+            </p>
+            <p>
               <strong>Character Count:</strong> {uploadResult.character_count}
             </p>
 
             <div>
-              <h4 className="font-semibold mb-2">Extracted Text Preview</h4>
-              <div className="bg-white border rounded-lg p-4 max-h-72 overflow-y-auto whitespace-pre-wrap text-sm">
-                {uploadResult.text_preview}
+              <h4 className="font-semibold mb-2 mt-4">Extracted Pages Preview</h4>
+
+              <div className="space-y-3 max-h-96 overflow-y-auto">
+                {uploadResult.pages.slice(0, 10).map((page) => (
+                  <div key={page.page_number} className="bg-white border rounded-lg p-4">
+                    <p className="font-semibold mb-2">Page {page.page_number}</p>
+                    <p className="whitespace-pre-wrap text-sm">
+                      {page.text || 'No extractable text found on this page.'}
+                    </p>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
