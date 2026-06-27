@@ -1,10 +1,24 @@
 import { useState } from 'react'
 
+type UploadResponse = {
+  message: string
+  document_title: string
+  filename: string
+  source_language: string
+  target_language: string
+  preserve_arabic_terms: boolean
+  preserve_quranic_examples: boolean
+  text_preview: string
+  character_count: number
+}
+
 function Upload() {
   const [documentTitle, setDocumentTitle] = useState('')
   const [sourceLanguage, setSourceLanguage] = useState('Mixed English + Arabic')
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [uploadStatus, setUploadStatus] = useState('')
+  const [isUploading, setIsUploading] = useState(false)
+  const [uploadResult, setUploadResult] = useState<UploadResponse | null>(null)
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -19,23 +33,55 @@ function Upload() {
     if (!allowedTypes.includes(file.type)) {
       setUploadStatus('Please select a PDF or DOCX file.')
       setSelectedFile(null)
+      setUploadResult(null)
       return
     }
 
     setSelectedFile(file)
     setUploadStatus('File selected successfully.')
+    setUploadResult(null)
+
+    if (!documentTitle) {
+      setDocumentTitle(file.name.replace(/\.[^/.]+$/, ''))
+    }
   }
 
-  const handleUpload = () => {
+  const handleUpload = async () => {
     if (!selectedFile) {
       setUploadStatus('Please choose a file before uploading.')
       return
     }
 
-    setUploadStatus('Document uploaded successfully.')
+    try {
+      setIsUploading(true)
+      setUploadStatus('Uploading and processing document...')
 
-    if (!documentTitle) {
-      setDocumentTitle(selectedFile.name)
+      const formData = new FormData()
+      formData.append('file', selectedFile)
+      formData.append('document_title', documentTitle || selectedFile.name)
+      formData.append('source_language', sourceLanguage)
+      formData.append('target_language', 'Uyghur')
+      formData.append('preserve_arabic_terms', 'true')
+      formData.append('preserve_quranic_examples', 'true')
+
+      const response = await fetch('http://localhost:8000/api/upload', {
+        method: 'POST',
+        body: formData,
+      })
+
+      if (!response.ok) {
+        throw new Error('Upload failed.')
+      }
+
+      const data: UploadResponse = await response.json()
+
+      setUploadResult(data)
+      setUploadStatus('Document uploaded and processed successfully.')
+    } catch (error) {
+      setUploadStatus('Upload failed. Please make sure the backend server is running.')
+      setUploadResult(null)
+    } finally {
+      setIsUploading(false)
     }
   }
 
@@ -81,7 +127,10 @@ function Upload() {
 
         <div>
           <p className="font-medium mb-2">Target Language</p>
-          <button className="bg-blue-500 text-white px-4 py-2 rounded-lg">
+          <button
+            type="button"
+            className="bg-blue-500 text-white px-4 py-2 rounded-lg"
+          >
             Uyghur
           </button>
         </div>
@@ -89,10 +138,16 @@ function Upload() {
         <div>
           <p className="font-medium mb-2">Preservation Options</p>
           <div className="flex gap-4">
-            <button className="bg-indigo-500 text-white px-4 py-2 rounded-lg">
+            <button
+              type="button"
+              className="bg-indigo-500 text-white px-4 py-2 rounded-lg"
+            >
               Preserve Arabic Terms
             </button>
-            <button className="bg-indigo-500 text-white px-4 py-2 rounded-lg">
+            <button
+              type="button"
+              className="bg-indigo-500 text-white px-4 py-2 rounded-lg"
+            >
               Preserve Quranic Examples
             </button>
           </div>
@@ -133,10 +188,41 @@ function Upload() {
 
         <button
           onClick={handleUpload}
-          className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold"
+          disabled={isUploading}
+          className={`w-full py-3 rounded-lg font-semibold text-white ${
+            isUploading
+              ? 'bg-blue-300 cursor-not-allowed'
+              : 'bg-blue-600 hover:bg-blue-700'
+          }`}
         >
-          Upload Document
+          {isUploading ? 'Processing...' : 'Upload Document'}
         </button>
+
+        {uploadResult && (
+          <div className="bg-green-50 border border-green-200 rounded-xl p-6 space-y-3">
+            <h3 className="text-xl font-bold">Backend Processing Result</h3>
+
+            <p>
+              <strong>Message:</strong> {uploadResult.message}
+            </p>
+            <p>
+              <strong>Document Title:</strong> {uploadResult.document_title}
+            </p>
+            <p>
+              <strong>Filename:</strong> {uploadResult.filename}
+            </p>
+            <p>
+              <strong>Character Count:</strong> {uploadResult.character_count}
+            </p>
+
+            <div>
+              <h4 className="font-semibold mb-2">Extracted Text Preview</h4>
+              <div className="bg-white border rounded-lg p-4 max-h-72 overflow-y-auto whitespace-pre-wrap text-sm">
+                {uploadResult.text_preview}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </section>
   )
