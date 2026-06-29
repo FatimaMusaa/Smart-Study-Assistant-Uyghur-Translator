@@ -1,26 +1,44 @@
 import { useEffect, useState } from 'react'
-import type { UploadedDocument } from '../types/document'
+import { useNavigate } from 'react-router-dom'
+import type { ExtractedPage, UploadedDocument } from '../types/document'
 
 function Documents() {
-  const [document, setDocument] = useState<UploadedDocument | null>(null)
+  const [uploadedDocument, setUploadedDocument] =
+    useState<UploadedDocument | null>(null)
+
+  const navigate = useNavigate()
 
   useEffect(() => {
     const savedDocument = localStorage.getItem('uploadedDocument')
 
-    if (savedDocument) {
-      setDocument(JSON.parse(savedDocument))
+    if (!savedDocument) {
+      return
+    }
+
+    try {
+      const parsedDocument = JSON.parse(savedDocument) as UploadedDocument
+      setUploadedDocument(parsedDocument)
+    } catch {
+      localStorage.removeItem('uploadedDocument')
+      setUploadedDocument(null)
     }
   }, [])
 
-  if (!document) {
+  const handleTranslatePage = (page: ExtractedPage) => {
+    localStorage.setItem('selectedPage', JSON.stringify(page))
+    navigate('/translation')
+  }
+
+  if (!uploadedDocument) {
     return (
       <section>
-        <h2 className="text-3xl font-bold mb-8">Documents</h2>
+        <h2 className="mb-8 text-3xl font-bold">Documents</h2>
 
-        <div className="bg-white rounded-xl shadow p-10 text-center">
-          <p className="text-slate-600 mb-4">
+        <div className="rounded-xl bg-white p-10 text-center shadow">
+          <p className="mb-4 text-slate-600">
             No uploaded document found yet.
           </p>
+
           <p className="text-sm text-slate-500">
             Upload a PDF or DOCX document first, then return to this page.
           </p>
@@ -31,63 +49,82 @@ function Documents() {
 
   return (
     <section>
-      <h2 className="text-3xl font-bold mb-8">Documents</h2>
+      <h2 className="mb-8 text-3xl font-bold">Documents</h2>
 
-      <div className="grid grid-cols-[260px_1fr] bg-white rounded-xl shadow overflow-hidden">
-        <aside className="bg-blue-600 text-white min-h-[500px]">
-          <div className="p-5 border-b border-blue-500 font-semibold">
-            {document.document_title}
+      <div className="grid grid-cols-[260px_1fr] overflow-hidden rounded-xl bg-white shadow">
+        <aside className="min-h-[500px] bg-blue-600 text-white">
+          <div className="border-b border-blue-500 p-5 font-semibold">
+            {uploadedDocument.document_title}
           </div>
-          <div className="p-5 border-b border-blue-500 text-sm">
-            {document.filename}
+
+          <div className="border-b border-blue-500 p-5 text-sm">
+            {uploadedDocument.filename}
           </div>
         </aside>
 
-        <main className="p-10 space-y-5">
+        <main className="space-y-5 p-10">
           <p>
-            <strong>Document Name:</strong> {document.document_title}
+            <strong>Document Name:</strong>{' '}
+            {uploadedDocument.document_title}
           </p>
+
           <p>
-            <strong>Filename:</strong> {document.filename}
+            <strong>Filename:</strong> {uploadedDocument.filename}
           </p>
+
           <p>
-            <strong>Total Pages:</strong> {document.page_count}
+            <strong>Total Pages:</strong> {uploadedDocument.page_count}
           </p>
+
           <p>
-            <strong>Character Count:</strong> {document.character_count}
+            <strong>Character Count:</strong>{' '}
+            {uploadedDocument.character_count}
           </p>
+
           <p>
-            <strong>Source Language:</strong> {document.source_language}
+            <strong>Source Language:</strong>{' '}
+            {uploadedDocument.source_language}
           </p>
+
           <p>
-            <strong>Target Language:</strong> {document.target_language}
+            <strong>Target Language:</strong>{' '}
+            {uploadedDocument.target_language}
           </p>
+
           <p>
             <strong>Preserved Arabic Terms:</strong>{' '}
-            {document.preserve_arabic_terms ? 'Enabled' : 'Disabled'}
+            {uploadedDocument.preserve_arabic_terms ? 'Enabled' : 'Disabled'}
           </p>
+
           <p>
             <strong>Preserved Quranic Examples:</strong>{' '}
-            {document.preserve_quranic_examples ? 'Enabled' : 'Disabled'}
+            {uploadedDocument.preserve_quranic_examples
+              ? 'Enabled'
+              : 'Disabled'}
           </p>
 
           <div>
-            <h3 className="font-bold mt-8 mb-3">Extracted Pages Preview</h3>
+            <h3 className="mb-3 mt-8 font-bold">Extracted Pages Preview</h3>
 
-            <div className="space-y-3 max-h-96 overflow-y-auto">
-              {document.pages.slice(0, 10).map((page) => (
+            <div className="max-h-96 space-y-3 overflow-y-auto">
+              {uploadedDocument.pages.slice(0, 10).map((page) => (
                 <div
                   key={page.page_number}
-                  className="border rounded-lg p-4 bg-slate-50"
+                  className="rounded-lg border bg-slate-50 p-4"
                 >
-                  <div className="flex items-center justify-between mb-2">
+                  <div className="mb-2 flex items-center justify-between gap-4">
                     <p className="font-semibold">Page {page.page_number}</p>
-                    <button className="bg-blue-600 text-white px-4 py-2 rounded-lg">
+
+                    <button
+                      type="button"
+                      onClick={() => handleTranslatePage(page)}
+                      className="rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
+                    >
                       Translate Page
                     </button>
                   </div>
 
-                  <p className="whitespace-pre-wrap text-sm">
+                  <p className="max-h-52 overflow-y-auto whitespace-pre-wrap text-sm">
                     {page.text || 'No extractable text found on this page.'}
                   </p>
                 </div>

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, File, Form, UploadFile, HTTPException
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
 from app.services.document_parser import extract_text_from_file
 
@@ -16,6 +16,12 @@ async def upload_document(
 ):
     allowed_extensions = [".pdf", ".docx"]
 
+    if not file.filename:
+        raise HTTPException(
+            status_code=400,
+            detail="Uploaded file must have a filename.",
+        )
+
     if not any(file.filename.lower().endswith(ext) for ext in allowed_extensions):
         raise HTTPException(
             status_code=400,
@@ -24,10 +30,12 @@ async def upload_document(
 
     file_bytes = await file.read()
 
-    extracted_text = extract_text_from_file(
+    extracted_document = extract_text_from_file(
         filename=file.filename,
         file_bytes=file_bytes,
     )
+
+    full_text = extracted_document["full_text"]
 
     return {
         "message": "Document uploaded and processed successfully.",
@@ -37,6 +45,10 @@ async def upload_document(
         "target_language": target_language,
         "preserve_arabic_terms": preserve_arabic_terms,
         "preserve_quranic_examples": preserve_quranic_examples,
-        "text_preview": extracted_text[:1000],
-        "character_count": len(extracted_text),
+        "page_count": extracted_document["page_count"],
+        "pages": extracted_document["pages"],
+        "chapter_count": extracted_document["chapter_count"],
+        "chapters": extracted_document["chapters"],
+        "text_preview": full_text[:1000],
+        "character_count": len(full_text),
     }
