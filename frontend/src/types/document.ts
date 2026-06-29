@@ -3,6 +3,14 @@ export type ExtractedPage = {
   text: string
 }
 
+export type ExtractedChapter = {
+  chapter_number: number
+  title: string
+  start_page: number
+  end_page: number
+  text: string
+}
+
 export type UploadedDocument = {
   message: string
   document_title: string
@@ -13,6 +21,8 @@ export type UploadedDocument = {
   preserve_quranic_examples: boolean
   page_count: number
   pages: ExtractedPage[]
+  chapter_count: number
+  chapters: ExtractedChapter[]
   text_preview: string
   character_count: number
 }

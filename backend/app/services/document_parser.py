@@ -104,6 +104,34 @@ def detect_chapters_from_pages(pages: list[ExtractedPage]) -> list[ExtractedChap
         re.IGNORECASE,
     )
 
+    table_of_contents_keywords = [
+        "TABLE OF CONTENTS",
+        "CONTENTS",
+        "الفهرس",
+    ]
+
+    def is_table_of_contents_page(text: str) -> bool:
+        upper_text = text.upper()
+        return any(keyword in upper_text for keyword in table_of_contents_keywords)
+
+    def is_toc_style_line(line: str) -> bool:
+        # Table of contents lines often contain long dotted leaders.
+        if "...." in line or "……" in line:
+            return True
+
+        # TOC chapter entries often end with a page number.
+        # Example: Chapter 7 ............ 84
+        if re.search(r"\bChapter\s+\d+.*\b\d{1,3}$", line, re.IGNORECASE):
+            return True
+
+        return False
+
+    def normalize_title(line: str) -> str:
+        # Remove excessive dotted leaders and extra spacing.
+        line = re.sub(r"\.{4,}", " ", line)
+        line = re.sub(r"\s+", " ", line)
+        return line.strip()
+
     for page in pages:
         page_number = page["page_number"]
         text = page["text"]
@@ -111,44 +139,58 @@ def detect_chapters_from_pages(pages: list[ExtractedPage]) -> list[ExtractedChap
         if not text:
             continue
 
+        if is_table_of_contents_page(text):
+            continue
+
         lines = [line.strip() for line in text.splitlines() if line.strip()]
 
-        for index, line in enumerate(lines[:15]):
+        # Real chapter headings are usually near the top of the page.
+        for index, line in enumerate(lines[:8]):
+            if is_toc_style_line(line):
+                continue
+
             match = chapter_pattern.search(line)
 
-            if match:
-                chapter_number_text = match.group(1) or match.group(2)
+            if not match:
+                continue
 
-                if not chapter_number_text:
-                    continue
+            chapter_number_text = match.group(1) or match.group(2)
 
-                chapter_number = int(chapter_number_text)
+            if not chapter_number_text:
+                continue
 
-                title_lines = [line]
+            chapter_number = int(chapter_number_text)
 
-                if index + 1 < len(lines):
-                    next_line = lines[index + 1]
+            title_lines = [normalize_title(line)]
 
-                    if len(next_line) < 120:
-                        title_lines.append(next_line)
+            # Add next line as subtitle only if it does not look like TOC.
+            if index + 1 < len(lines):
+                next_line = lines[index + 1].strip()
 
-                title = " - ".join(title_lines)
+                if (
+                    len(next_line) < 120
+                    and not is_toc_style_line(next_line)
+                    and not re.fullmatch(r"\d{1,3}", next_line)
+                ):
+                    title_lines.append(normalize_title(next_line))
 
-                already_detected = any(
-                    chapter["chapter_number"] == chapter_number
-                    for chapter in chapter_starts
+            title = " - ".join(title_lines)
+
+            already_detected = any(
+                chapter["chapter_number"] == chapter_number
+                for chapter in chapter_starts
+            )
+
+            if not already_detected:
+                chapter_starts.append(
+                    {
+                        "chapter_number": chapter_number,
+                        "title": title,
+                        "start_page": page_number,
+                    }
                 )
 
-                if not already_detected:
-                    chapter_starts.append(
-                        {
-                            "chapter_number": chapter_number,
-                            "title": title,
-                            "start_page": page_number,
-                        }
-                    )
-
-                break
+            break
 
     chapters: list[ExtractedChapter] = []
 

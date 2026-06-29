@@ -1,6 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import type { ExtractedPage, UploadedDocument } from '../types/document'
+import type {
+  ExtractedChapter,
+  ExtractedPage,
+  UploadedDocument,
+} from '../types/document'
 
 function Documents() {
   const [uploadedDocument, setUploadedDocument] =
@@ -24,8 +28,15 @@ function Documents() {
     }
   }, [])
 
+  const handleTranslateChapter = (chapter: ExtractedChapter) => {
+    localStorage.setItem('selectedChapter', JSON.stringify(chapter))
+    localStorage.removeItem('selectedPage')
+    navigate('/translation')
+  }
+
   const handleTranslatePage = (page: ExtractedPage) => {
     localStorage.setItem('selectedPage', JSON.stringify(page))
+    localStorage.removeItem('selectedChapter')
     navigate('/translation')
   }
 
@@ -77,6 +88,11 @@ function Documents() {
           </p>
 
           <p>
+            <strong>Detected Chapters:</strong>{' '}
+            {uploadedDocument.chapter_count}
+          </p>
+
+          <p>
             <strong>Character Count:</strong>{' '}
             {uploadedDocument.character_count}
           </p>
@@ -104,7 +120,46 @@ function Documents() {
           </p>
 
           <div>
-            <h3 className="mb-3 mt-8 font-bold">Extracted Pages Preview</h3>
+            <h3 className="mb-3 mt-8 text-xl font-bold">Detected Chapters</h3>
+
+            {uploadedDocument.chapters.length === 0 ? (
+              <div className="rounded-lg border bg-yellow-50 p-4 text-sm">
+                No chapters were detected automatically. You can still translate
+                individual pages below.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {uploadedDocument.chapters.map((chapter) => (
+                  <div
+                    key={chapter.chapter_number}
+                    className="rounded-lg border bg-blue-50 p-4"
+                  >
+                    <div className="flex items-center justify-between gap-4">
+                      <div>
+                        <p className="font-semibold">{chapter.title}</p>
+                        <p className="text-sm text-slate-600">
+                          Pages {chapter.start_page}–{chapter.end_page}
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => handleTranslateChapter(chapter)}
+                        className="rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
+                      >
+                        Translate Chapter
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div>
+            <h3 className="mb-3 mt-8 text-xl font-bold">
+              Extracted Pages Preview
+            </h3>
 
             <div className="max-h-96 space-y-3 overflow-y-auto">
               {uploadedDocument.pages.slice(0, 10).map((page) => (
@@ -118,7 +173,7 @@ function Documents() {
                     <button
                       type="button"
                       onClick={() => handleTranslatePage(page)}
-                      className="rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
+                      className="rounded-lg bg-slate-700 px-4 py-2 text-white hover:bg-slate-800"
                     >
                       Translate Page
                     </button>
