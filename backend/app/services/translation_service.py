@@ -24,13 +24,7 @@ def create_mock_uyghur_translation(text: str, prompt: str) -> str:
 
 بۇ باسقۇچتا ھەقىقىي AI تەرجىمە مودېلى تېخى ئۇلانمىدى. ئەمما backend ھازىر تەرجىمە prompt نى قۇرۇپ، كېيىنكى AI ئۇلىنىشىغا تەييار ھالەتتە.
 
---- Translation Provider ---
 
-mock
-
---- Prompt Preview ---
-
-{prompt[:700]}
 
 --- ئەسلى مەزمۇننىڭ قىسقا كۆرۈنۈشى ---
 

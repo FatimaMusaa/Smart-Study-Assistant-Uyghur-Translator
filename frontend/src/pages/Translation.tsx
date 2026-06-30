@@ -20,6 +20,8 @@ type TranslationApiResponse = {
   target_language: string
   translated_text: string
   preserved_terms: string[]
+  prompt_preview: string
+  provider: string
 }
 
 function Translation() {
