@@ -29,13 +29,18 @@ class TranslationResponse(BaseModel):
     target_language: str
     translated_text: str
     preserved_terms: list[str]
+    prompt_preview: str
 
 
 @router.post("/translate", response_model=TranslationResponse)
 async def translate_text(payload: TranslationRequest):
     translation_result = translate_to_uyghur(
         payload.text,
+        title=payload.title,
         source_language=payload.source_language,
+        target_language=payload.target_language,
+        source_type=payload.source_type,
+        source_number=payload.source_number,
         preserve_arabic_terms=payload.preserve_arabic_terms,
         preserve_quranic_examples=payload.preserve_quranic_examples,
     )
@@ -49,4 +54,5 @@ async def translate_text(payload: TranslationRequest):
         target_language=payload.target_language,
         translated_text=translation_result["translated_text"],
         preserved_terms=translation_result["preserved_terms"],
+        prompt_preview=translation_result["prompt_preview"],
     )
