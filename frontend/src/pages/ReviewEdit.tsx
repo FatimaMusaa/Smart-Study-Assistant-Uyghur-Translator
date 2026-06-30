@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 
 type TranslatedContent = {
   title: string
@@ -6,6 +7,7 @@ type TranslatedContent = {
   translatedText: string
   sourceType: 'chapter' | 'page'
   sourceNumber: number
+  reviewStatus?: 'not_reviewed' | 'reviewed'
 }
 
 function ReviewEdit() {
@@ -13,6 +15,8 @@ function ReviewEdit() {
     useState<TranslatedContent | null>(null)
   const [editableTranslation, setEditableTranslation] = useState('')
   const [status, setStatus] = useState('Not reviewed yet.')
+
+  const navigate = useNavigate()
 
   useEffect(() => {
     const savedTranslation = localStorage.getItem('translatedContent')
@@ -24,6 +28,10 @@ function ReviewEdit() {
     const parsedTranslation = JSON.parse(savedTranslation) as TranslatedContent
     setTranslatedContent(parsedTranslation)
     setEditableTranslation(parsedTranslation.translatedText)
+
+    if (parsedTranslation.reviewStatus === 'reviewed') {
+      setStatus('Reviewed.')
+    }
   }, [])
 
   const handleSave = () => {
@@ -43,7 +51,35 @@ function ReviewEdit() {
   }
 
   const handleMarkAsReviewed = () => {
+    if (!translatedContent) {
+      setStatus('No translated content found.')
+      return
+    }
+
+    const reviewedContent: TranslatedContent = {
+      ...translatedContent,
+      translatedText: editableTranslation,
+      reviewStatus: 'reviewed',
+    }
+
+    localStorage.setItem('translatedContent', JSON.stringify(reviewedContent))
+    setTranslatedContent(reviewedContent)
     setStatus('Marked as reviewed.')
+  }
+
+  const handleGoToExport = () => {
+    if (!translatedContent) {
+      setStatus('No translated content found.')
+      return
+    }
+
+    const contentToExport: TranslatedContent = {
+      ...translatedContent,
+      translatedText: editableTranslation,
+    }
+
+    localStorage.setItem('translatedContent', JSON.stringify(contentToExport))
+    navigate('/export')
   }
 
   if (!translatedContent) {
@@ -96,12 +132,12 @@ function ReviewEdit() {
           Mark as Reviewed
         </button>
 
-        <button className="rounded-lg bg-blue-600 px-6 py-3 text-white">
-          Export DOCX
-        </button>
-
-        <button className="rounded-lg bg-blue-600 px-6 py-3 text-white">
-          Export PDF
+        <button
+          type="button"
+          onClick={handleGoToExport}
+          className="rounded-lg bg-blue-600 px-6 py-3 text-white hover:bg-blue-700"
+        >
+          Go to Export
         </button>
       </div>
 
