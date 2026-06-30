@@ -23,8 +23,18 @@ app.include_router(upload_router, prefix="/api")
 app.include_router(export_router, prefix="/api")
 app.include_router(translation_router, prefix="/api")
 
+
 @app.get("/")
 def root():
     return {
         "message": "Smart Study Assistant & Uyghur Translator API is running."
+    }
+
+@app.get("/api/health")
+def health_check():
+    return {
+        "status": "ok",
+        "message": "Backend API is connected.",
+        "service": "Smart Study Assistant & Uyghur Translator API",
+        "version": "0.1.0",
     }
