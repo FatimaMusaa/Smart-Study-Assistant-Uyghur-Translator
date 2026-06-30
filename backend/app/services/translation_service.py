@@ -2,6 +2,11 @@ from typing import Literal, TypedDict
 
 from app.core.config import get_settings
 from app.services.prompt_builder import build_translation_prompt
+from app.services.providers import (
+    translate_with_gemini,
+    translate_with_mock,
+    translate_with_openai,
+)
 
 
 class TranslationResult(TypedDict):
@@ -13,39 +18,6 @@ class TranslationResult(TypedDict):
 
 def get_preserved_terms() -> list[str]:
     return ["اسم", "فعل", "حرف", "رفع", "نصب", "جر"]
-
-
-def create_mock_uyghur_translation(text: str, prompt: str) -> str:
-    preview = text[:1200]
-
-    return f"""بۇ ھازىرچە ئارقا سۇپىدىن كەلگەن سىناق تەرجىمە نۇسخىسى.
-
-بۇ بۆلەكتە ئەسلى تېكىست ئۇيغۇرچىغا تەرجىمە قىلىنىدۇ. ئەرەبچە ئاتالغۇلار، مەسىلەن اسم، فعل، حرف، رفع، نصب، جر قاتارلىقلار ئۆز ھالىتىدە ساقلىنىدۇ.
-
-بۇ باسقۇچتا ھەقىقىي AI تەرجىمە مودېلى تېخى ئۇلانمىدى. ئەمما backend ھازىر تەرجىمە prompt نى قۇرۇپ، كېيىنكى AI ئۇلىنىشىغا تەييار ھالەتتە.
-
-
-
---- ئەسلى مەزمۇننىڭ قىسقا كۆرۈنۈشى ---
-
-{preview}
-"""
-
-
-def translate_with_mock(text: str, prompt: str) -> str:
-    return create_mock_uyghur_translation(text, prompt)
-
-
-def translate_with_openai_placeholder(text: str, prompt: str) -> str:
-    raise NotImplementedError(
-        "OpenAI translation provider is not implemented yet. Use TRANSLATION_PROVIDER=mock."
-    )
-
-
-def translate_with_gemini_placeholder(text: str, prompt: str) -> str:
-    raise NotImplementedError(
-        "Gemini translation provider is not implemented yet. Use TRANSLATION_PROVIDER=mock."
-    )
 
 
 def translate_to_uyghur(
@@ -76,10 +48,21 @@ def translate_to_uyghur(
 
     if settings.translation_provider == "mock":
         translated_text = translate_with_mock(text, prompt)
+
     elif settings.translation_provider == "openai":
-        translated_text = translate_with_openai_placeholder(text, prompt)
+        translated_text = translate_with_openai(
+            text,
+            prompt,
+            settings.openai_api_key,
+        )
+
     elif settings.translation_provider == "gemini":
-        translated_text = translate_with_gemini_placeholder(text, prompt)
+        translated_text = translate_with_gemini(
+            text,
+            prompt,
+            settings.gemini_api_key,
+        )
+
     else:
         translated_text = translate_with_mock(text, prompt)
 
