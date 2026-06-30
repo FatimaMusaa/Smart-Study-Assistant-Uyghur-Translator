@@ -30,7 +30,7 @@ class TranslationResponse(BaseModel):
     translated_text: str
     preserved_terms: list[str]
     prompt_preview: str
-
+    provider: str
 
 @router.post("/translate", response_model=TranslationResponse)
 async def translate_text(payload: TranslationRequest):
@@ -55,4 +55,5 @@ async def translate_text(payload: TranslationRequest):
         translated_text=translation_result["translated_text"],
         preserved_terms=translation_result["preserved_terms"],
         prompt_preview=translation_result["prompt_preview"],
+        provider=translation_result["provider"],
     )

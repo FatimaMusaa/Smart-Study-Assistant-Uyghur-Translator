@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.routes.upload import router as upload_router
 from app.routes.export import router as export_router
 from app.routes.translation import router as translation_router
+from app.core.config import get_settings
 
 app = FastAPI(
     title="Smart Study Assistant & Uyghur Translator API",
@@ -37,4 +38,5 @@ def health_check():
         "message": "Backend API is connected.",
         "service": "Smart Study Assistant & Uyghur Translator API",
         "version": "0.1.0",
+         "translation_provider": "mock"
     }
