@@ -8,6 +8,18 @@ type TranslatedContent = {
   translatedText: string
   sourceType: 'chapter' | 'page'
   sourceNumber: number
+  reviewStatus?: 'not_reviewed' | 'reviewed'
+}
+
+type TranslationApiResponse = {
+  message: string
+  title: string
+  source_type: 'chapter' | 'page'
+  source_number: number
+  source_language: string
+  target_language: string
+  translated_text: string
+  preserved_terms: string[]
 }
 
 function Translation() {
@@ -19,6 +31,7 @@ function Translation() {
   const [translationStatus, setTranslationStatus] = useState(
     'Translation has not started yet.',
   )
+  const [isTranslating, setIsTranslating] = useState(false)
 
   const navigate = useNavigate()
 
@@ -51,40 +64,65 @@ function Translation() {
     selectedPage?.text ||
     'No content selected yet. Go to Documents and click Translate Chapter or Translate Page.'
 
-  const createMockTranslation = (text: string) => {
-    const preview = text.slice(0, 1200)
+  const sourceType: 'chapter' | 'page' = selectedChapter ? 'chapter' : 'page'
 
-    return `بۇ ھازىرچە سىناق تەرجىمە نۇسخىسى.
+  const sourceNumber = selectedChapter
+    ? selectedChapter.chapter_number
+    : selectedPage?.page_number || 0
 
-بۇ بۆلەكتە ئەسلى تېكىست ئۇيغۇرچىغا تەرجىمە قىلىنىدۇ. ئەرەبچە ئاتالغۇلار، مەسىلەن اسم، فعل، حرف، رفع، نصب، جر قاتارلىقلار ئۆز ھالىتىدە ساقلىنىدۇ.
-
---- ئەسلى مەزمۇننىڭ قىسقا كۆرۈنۈشى ---
-
-${preview}`
-  }
-
-  const handleStartTranslation = () => {
+  const handleStartTranslation = async () => {
     if (!selectedChapter && !selectedPage) {
       setTranslationStatus('Please select a chapter or page first.')
       return
     }
 
-    setTranslationStatus('Mock translation generated successfully.')
+    try {
+      setIsTranslating(true)
+      setTranslationStatus('Sending text to backend translation endpoint...')
 
-    const mockTranslation = createMockTranslation(originalText)
-    setTranslatedText(mockTranslation)
+      const response = await fetch('http://localhost:8000/api/translate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          title: selectedTitle,
+          text: originalText,
+          source_language: 'Mixed English + Arabic',
+          target_language: 'Uyghur',
+          source_type: sourceType,
+          source_number: sourceNumber,
+          preserve_arabic_terms: true,
+          preserve_quranic_examples: true,
+        }),
+      })
 
-    const translatedContent: TranslatedContent = {
-      title: selectedTitle,
-      originalText,
-      translatedText: mockTranslation,
-      sourceType: selectedChapter ? 'chapter' : 'page',
-      sourceNumber: selectedChapter
-        ? selectedChapter.chapter_number
-        : selectedPage?.page_number || 0,
+      if (!response.ok) {
+        throw new Error('Translation request failed.')
+      }
+
+      const data: TranslationApiResponse = await response.json()
+
+      setTranslatedText(data.translated_text)
+      setTranslationStatus(data.message)
+
+      const translatedContent: TranslatedContent = {
+        title: selectedTitle,
+        originalText,
+        translatedText: data.translated_text,
+        sourceType,
+        sourceNumber,
+        reviewStatus: 'not_reviewed',
+      }
+
+      localStorage.setItem('translatedContent', JSON.stringify(translatedContent))
+    } catch {
+      setTranslationStatus(
+        'Translation failed. Make sure the backend server is running.',
+      )
+    } finally {
+      setIsTranslating(false)
     }
-
-    localStorage.setItem('translatedContent', JSON.stringify(translatedContent))
   }
 
   const handleContinueToReview = () => {
@@ -104,9 +142,14 @@ ${preview}`
         <button
           type="button"
           onClick={handleStartTranslation}
-          className="rounded-lg bg-blue-500 px-6 py-3 text-white hover:bg-blue-600"
+          disabled={isTranslating}
+          className={`rounded-lg px-6 py-3 text-white ${
+            isTranslating
+              ? 'cursor-not-allowed bg-blue-300'
+              : 'bg-blue-500 hover:bg-blue-600'
+          }`}
         >
-          Start Translation
+          {isTranslating ? 'Translating...' : 'Start Translation'}
         </button>
 
         <div className="flex-1 rounded-lg bg-white px-6 py-3">
