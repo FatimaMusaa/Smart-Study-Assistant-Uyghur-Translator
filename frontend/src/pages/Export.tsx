@@ -12,6 +12,7 @@ type TranslatedContent = {
 function Export() {
   const [translatedContent, setTranslatedContent] =
     useState<TranslatedContent | null>(null)
+  const [exportStatus, setExportStatus] = useState('')
 
   useEffect(() => {
     const savedTranslation = localStorage.getItem('translatedContent')
@@ -22,6 +23,15 @@ function Export() {
 
     setTranslatedContent(JSON.parse(savedTranslation) as TranslatedContent)
   }, [])
+
+  const createSafeFilename = (title: string, extension: string) => {
+    const safeTitle = title
+      .replace(/[^a-z0-9\u0600-\u06FF]+/gi, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 80)
+
+    return `${safeTitle || 'translated-document'}.${extension}`
+  }
 
   const handleDownloadTxt = () => {
     if (!translatedContent) {
@@ -56,15 +66,60 @@ ${translatedContent.originalText}
     const link = document.createElement('a')
 
     link.href = url
-    link.download = `${translatedContent.title
-      .replace(/[^a-z0-9\u0600-\u06FF]+/gi, '-')
-      .slice(0, 80)}.txt`
+    link.download = createSafeFilename(translatedContent.title, 'txt')
 
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
 
     URL.revokeObjectURL(url)
+  }
+
+  const handleDownloadDocx = async () => {
+    if (!translatedContent) {
+      return
+    }
+
+    try {
+      setExportStatus('Generating DOCX file...')
+
+      const response = await fetch('http://localhost:8000/api/export/docx', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          title: translatedContent.title,
+          original_text: translatedContent.originalText,
+          translated_text: translatedContent.translatedText,
+          source_type: translatedContent.sourceType,
+          source_number: translatedContent.sourceNumber,
+          review_status: translatedContent.reviewStatus || 'not_reviewed',
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error('DOCX export failed.')
+      }
+
+      const blob = await response.blob()
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+
+      link.href = url
+      link.download = createSafeFilename(translatedContent.title, 'docx')
+
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+
+      URL.revokeObjectURL(url)
+      setExportStatus('DOCX downloaded successfully.')
+    } catch {
+      setExportStatus(
+        'DOCX export failed. Make sure the backend server is running.',
+      )
+    }
   }
 
   if (!translatedContent) {
@@ -105,21 +160,27 @@ ${translatedContent.originalText}
         </p>
       </div>
 
+      {exportStatus && (
+        <div className="mb-8 rounded-lg border border-blue-200 bg-white p-4">
+          <strong>Status:</strong> {exportStatus}
+        </div>
+      )}
+
       <div className="mb-8 space-y-6">
         <button
           type="button"
-          onClick={handleDownloadTxt}
+          onClick={handleDownloadDocx}
           className="w-full rounded-xl bg-blue-600 py-5 text-xl font-bold text-white hover:bg-blue-700"
         >
-          Download TXT
+          Download DOCX
         </button>
 
         <button
           type="button"
-          disabled
-          className="w-full cursor-not-allowed rounded-xl bg-blue-300 py-5 text-xl font-bold text-white"
+          onClick={handleDownloadTxt}
+          className="w-full rounded-xl bg-slate-700 py-5 text-xl font-bold text-white hover:bg-slate-800"
         >
-          Download DOCX Coming Soon
+          Download TXT
         </button>
 
         <button

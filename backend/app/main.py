@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.routes.upload import router as upload_router
+from app.routes.export import router as export_router
 
 app = FastAPI(
     title="Smart Study Assistant & Uyghur Translator API",
@@ -18,6 +19,7 @@ app.add_middleware(
 )
 
 app.include_router(upload_router, prefix="/api")
+app.include_router(export_router, prefix="/api")
 
 
 @app.get("/")
