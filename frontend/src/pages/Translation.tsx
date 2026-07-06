@@ -33,6 +33,7 @@ function Translation() {
   const [translationStatus, setTranslationStatus] = useState(
     'Translation has not started yet.',
   )
+  const [translationProvider, setTranslationProvider] = useState('')
   const [isTranslating, setIsTranslating] = useState(false)
 
   const navigate = useNavigate()
@@ -80,6 +81,7 @@ function Translation() {
 
     try {
       setIsTranslating(true)
+      setTranslationProvider('')
       setTranslationStatus('Sending text to backend translation endpoint...')
 
       const response = await fetch('http://localhost:8000/api/translate', {
@@ -100,13 +102,18 @@ function Translation() {
       })
 
       if (!response.ok) {
-        throw new Error('Translation request failed.')
+        const errorData = await response.json().catch(() => null)
+
+        throw new Error(
+          errorData?.detail || 'Translation request failed.',
+        )
       }
 
       const data: TranslationApiResponse = await response.json()
 
       setTranslatedText(data.translated_text)
       setTranslationStatus(data.message)
+      setTranslationProvider(data.provider)
 
       const translatedContent: TranslatedContent = {
         title: selectedTitle,
@@ -118,13 +125,16 @@ function Translation() {
       }
 
       localStorage.setItem('translatedContent', JSON.stringify(translatedContent))
-    } catch {
-      setTranslationStatus(
-        'Translation failed. Make sure the backend server is running.',
-      )
-    } finally {
-      setIsTranslating(false)
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Translation failed. Make sure the backend server is running.'
+
+      setTranslationStatus(message)
+      setTranslationProvider('')
     }
+    
   }
 
   const handleContinueToReview = () => {
@@ -168,7 +178,15 @@ function Translation() {
       </div>
 
       <div className="mb-6 rounded-lg border border-blue-200 bg-white p-4">
-        <strong>Status:</strong> {translationStatus}
+        <p>
+          <strong>Status:</strong> {translationStatus}
+        </p>
+
+        {translationProvider && (
+          <p className="mt-1 text-sm text-slate-600">
+            <strong>Provider:</strong> {translationProvider}
+          </p>
+        )}
       </div>
 
       <div className="grid grid-cols-2 gap-8">

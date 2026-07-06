@@ -5,3 +5,4 @@ pymupdf
 python-docx
 python-dotenv
 pydantic-settings
+google-genai
