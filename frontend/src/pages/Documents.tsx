@@ -162,14 +162,52 @@ function Documents() {
             </h3>
 
             <div className="max-h-96 space-y-3 overflow-y-auto">
-              {uploadedDocument.pages.slice(0, 10).map((page) => (
+              {uploadedDocument.pages.slice(0, 15).map((page) => (
                 <div
                   key={page.page_number}
-                  className="rounded-lg border bg-slate-50 p-4"
+                  className="overflow-hidden rounded-lg border bg-slate-50 p-4"
                 >
                   <div className="mb-2 flex items-center justify-between gap-4">
                     <p className="font-semibold">Page {page.page_number}</p>
 
+                    <p className="mt-2 text-sm text-slate-500">
+                       Tables detected: {page.table_count || 0}
+                    </p>
+                    {page.tables && page.tables.length > 0 && (
+                      <div className="mt-4 space-y-4">
+                        {page.tables.map((table) => (
+                          <div
+                            key={table.table_number}
+                            className="rounded-lg border bg-white p-3"
+                          >
+                            <p className="mb-2 text-sm font-semibold">
+                              Table {table.table_number} — {table.row_count} rows ×{' '}
+                              {table.column_count} columns
+                            </p>
+
+                            <div className="max-h-80 max-w-full overflow-auto rounded border">
+                              <table className="min-w-max border-collapse text-sm">
+                                <tbody>
+                                  {table.rows.map((row, rowIndex) => (
+                                    <tr key={rowIndex}>
+                                      {row.map((cell, cellIndex) => (
+                                        <td
+                                          key={cellIndex}
+                                          className="min-w-32 border px-3 py-2 align-top"
+                                          dir="auto"
+                                        >
+                                          {cell || ''}
+                                        </td>
+                                      ))}
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                     <button
                       type="button"
                       onClick={() => handleTranslatePage(page)}

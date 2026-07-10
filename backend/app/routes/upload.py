@@ -35,7 +35,7 @@ async def upload_document(
         file_bytes=file_bytes,
     )
 
-    full_text = extracted_document["full_text"]
+    full_text = extracted_document.get("text", "")
 
     return {
         "message": "Document uploaded and processed successfully.",
@@ -45,10 +45,10 @@ async def upload_document(
         "target_language": target_language,
         "preserve_arabic_terms": preserve_arabic_terms,
         "preserve_quranic_examples": preserve_quranic_examples,
-        "page_count": extracted_document["page_count"],
-        "pages": extracted_document["pages"],
-        "chapter_count": extracted_document["chapter_count"],
-        "chapters": extracted_document["chapters"],
+        "page_count": extracted_document.get("page_count", 0),
+        "pages": extracted_document.get("pages", []),
+        "chapter_count": extracted_document.get("chapter_count", 0),
+        "chapters": extracted_document.get("chapters", []),
         "text_preview": full_text[:1000],
         "character_count": len(full_text),
     }

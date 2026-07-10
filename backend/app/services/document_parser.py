@@ -1,65 +1,128 @@
-from io import BytesIO
 import re
-from typing import TypedDict
+from typing import Any
 
 import fitz
 from docx import Document
 
 
-class ExtractedPage(TypedDict):
-    page_number: int
-    text: str
+def is_likely_real_table(rows: list[list[str]]) -> bool:
+    if len(rows) < 2:
+        return False
+
+    column_counts = [len(row) for row in rows if row]
+
+    if not column_counts:
+        return False
+
+    max_columns = max(column_counts)
+
+    # A real table should usually have at least 2 columns.
+    if max_columns < 2:
+        return False
+
+    # Avoid detecting simple bullet/word lists as tables.
+    non_empty_cells = [
+        cell.strip()
+        for row in rows
+        for cell in row
+        if cell and cell.strip()
+    ]
+
+    if len(non_empty_cells) < 4:
+        return False
+
+    # If most rows only contain one useful cell, it is probably a list, not a table.
+    rows_with_multiple_cells = 0
+
+    for row in rows:
+        useful_cells = [cell for cell in row if cell and cell.strip()]
+        if len(useful_cells) >= 2:
+            rows_with_multiple_cells += 1
+
+    if rows_with_multiple_cells < 2:
+        return False
+
+    # If cells are mostly very short one-word list items, likely false positive.
+    average_cell_length = sum(len(cell) for cell in non_empty_cells) / len(non_empty_cells)
+
+    if average_cell_length < 2:
+        return False
+
+    return True
 
 
-class ExtractedChapter(TypedDict):
-    chapter_number: int
-    title: str
-    start_page: int
-    end_page: int
-    text: str
+def extract_tables_from_page(page: fitz.Page) -> list[dict[str, Any]]:
+    tables: list[dict[str, Any]] = []
 
+    try:
+        found_tables = page.find_tables()
+    except Exception:
+        return tables
 
-class ExtractedDocument(TypedDict):
-    full_text: str
-    pages: list[ExtractedPage]
-    page_count: int
-    chapters: list[ExtractedChapter]
-    chapter_count: int
+    for table_index, table in enumerate(found_tables.tables, start=1):
+        try:
+            extracted_rows = table.extract()
+        except Exception:
+            continue
 
+        cleaned_rows: list[list[str]] = []
 
-def extract_text_from_file(filename: str, file_bytes: bytes) -> ExtractedDocument:
-    if filename.lower().endswith(".pdf"):
-        return extract_text_from_pdf(file_bytes)
+        for row in extracted_rows:
+            cleaned_row = []
 
-    if filename.lower().endswith(".docx"):
-        return extract_text_from_docx(file_bytes)
+            for cell in row:
+                if cell is None:
+                    cleaned_row.append("")
+                else:
+                    cleaned_row.append(str(cell).strip())
 
-    raise ValueError("Unsupported file type.")
+            if any(cell for cell in cleaned_row):
+                cleaned_rows.append(cleaned_row)
 
+        if not cleaned_rows:
+            continue
 
-def extract_text_from_pdf(file_bytes: bytes) -> ExtractedDocument:
-    pages: list[ExtractedPage] = []
-    full_text_parts: list[str] = []
+        if not is_likely_real_table(cleaned_rows):
+            continue
 
-    with fitz.open(stream=file_bytes, filetype="pdf") as document:
-        for page_number, page in enumerate(document, start=1):
-            page_text = page.get_text().strip()
+        tables.append(
+            {
+                "table_number": len(tables) + 1,
+                "rows": cleaned_rows,
+                "row_count": len(cleaned_rows),
+                "column_count": max(len(row) for row in cleaned_rows),
+            }
+        )
 
-            pages.append(
-                {
-                    "page_number": page_number,
-                    "text": page_text,
-                }
-            )
+    return tables
 
-            full_text_parts.append(f"\n--- Page {page_number} ---\n")
-            full_text_parts.append(page_text)
+def extract_text_from_pdf(file_bytes: bytes) -> dict[str, Any]:
+    doc = fitz.open(stream=file_bytes, filetype="pdf")
 
-    full_text = "\n".join(full_text_parts)
+    pages = []
+    full_text_parts = []
+
+    for page_index, page in enumerate(doc, start=1):
+        page_text = page.get_text("text").strip()
+        page_tables = extract_tables_from_page(page)
+
+        pages.append(
+            {
+                "page_number": page_index,
+                "text": page_text,
+                "tables": page_tables,
+                "table_count": len(page_tables),
+            }
+        )
+
+        if page_text:
+            full_text_parts.append(f"--- Page {page_index} ---\n{page_text}")
+
+    full_text = "\n\n".join(full_text_parts)
     chapters = detect_chapters_from_pages(pages)
 
     return {
-        "full_text": full_text,
+        "text": full_text,
         "pages": pages,
         "page_count": len(pages),
         "chapters": chapters,
@@ -67,7 +130,9 @@ def extract_text_from_pdf(file_bytes: bytes) -> ExtractedDocument:
     }
 
 
-def extract_text_from_docx(file_bytes: bytes) -> ExtractedDocument:
+def extract_text_from_docx(file_bytes: bytes) -> dict[str, Any]:
+    from io import BytesIO
+
     document = Document(BytesIO(file_bytes))
 
     paragraphs = [
@@ -76,19 +141,21 @@ def extract_text_from_docx(file_bytes: bytes) -> ExtractedDocument:
         if paragraph.text.strip()
     ]
 
-    full_text = "\n".join(paragraphs)
+    full_text = "\n\n".join(paragraphs)
 
-    pages: list[ExtractedPage] = [
+    pages = [
         {
             "page_number": 1,
             "text": full_text,
+            "tables": [],
+            "table_count": 0,
         }
     ]
 
     chapters = detect_chapters_from_pages(pages)
 
     return {
-        "full_text": full_text,
+        "text": full_text,
         "pages": pages,
         "page_count": 1,
         "chapters": chapters,
@@ -96,109 +163,89 @@ def extract_text_from_docx(file_bytes: bytes) -> ExtractedDocument:
     }
 
 
-def detect_chapters_from_pages(pages: list[ExtractedPage]) -> list[ExtractedChapter]:
-    chapter_starts: list[dict[str, int | str]] = []
+def extract_text_from_file(filename: str, file_bytes: bytes) -> dict[str, Any]:
+    lower_filename = filename.lower()
 
-    chapter_pattern = re.compile(
-        r"\bCHAPTER\s+(\d+)\b|\bChapter\s+(\d+)\b",
-        re.IGNORECASE,
-    )
+    if lower_filename.endswith(".pdf"):
+        return extract_text_from_pdf(file_bytes)
 
-    table_of_contents_keywords = [
+    if lower_filename.endswith(".docx"):
+        return extract_text_from_docx(file_bytes)
+
+    raise ValueError("Unsupported file type. Please upload a PDF or DOCX file.")
+
+
+def is_toc_like_line(line: str) -> bool:
+    stripped = line.strip()
+
+    if not stripped:
+        return False
+
+    if re.search(r"\.{3,}", stripped):
+        return True
+
+    if re.search(r"\s+\d+$", stripped) and len(stripped) > 12:
+        return True
+
+    return False
+
+
+def page_looks_like_toc(page_text: str) -> bool:
+    upper_text = page_text.upper()
+
+    toc_keywords = [
         "TABLE OF CONTENTS",
         "CONTENTS",
         "الفهرس",
     ]
 
-    def is_table_of_contents_page(text: str) -> bool:
-        upper_text = text.upper()
-        return any(keyword in upper_text for keyword in table_of_contents_keywords)
+    return any(keyword in upper_text for keyword in toc_keywords)
 
-    def is_toc_style_line(line: str) -> bool:
-        # Table of contents lines often contain long dotted leaders.
-        if "...." in line or "……" in line:
-            return True
 
-        # TOC chapter entries often end with a page number.
-        # Example: Chapter 7 ............ 84
-        if re.search(r"\bChapter\s+\d+.*\b\d{1,3}$", line, re.IGNORECASE):
-            return True
+def detect_chapters_from_pages(pages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    chapter_candidates = []
 
-        return False
-
-    def normalize_title(line: str) -> str:
-        # Remove excessive dotted leaders and extra spacing.
-        line = re.sub(r"\.{4,}", " ", line)
-        line = re.sub(r"\s+", " ", line)
-        return line.strip()
+    chapter_pattern = re.compile(
+        r"^(CHAPTER\s+\d+(?:\s*&\s*\d+)?(?:\s*[-–]\s*.+)?|CHAPTER\s+\d+\s+.+)$",
+        re.IGNORECASE,
+    )
 
     for page in pages:
         page_number = page["page_number"]
-        text = page["text"]
+        page_text = page.get("text", "")
 
-        if not text:
+        if page_looks_like_toc(page_text):
             continue
 
-        if is_table_of_contents_page(text):
-            continue
+        lines = [
+            line.strip()
+            for line in page_text.splitlines()
+            if line.strip()
+        ]
 
-        lines = [line.strip() for line in text.splitlines() if line.strip()]
+        search_lines = lines[:8]
 
-        # Real chapter headings are usually near the top of the page.
-        for index, line in enumerate(lines[:8]):
-            if is_toc_style_line(line):
+        for line in search_lines:
+            if is_toc_like_line(line):
                 continue
 
-            match = chapter_pattern.search(line)
-
-            if not match:
-                continue
-
-            chapter_number_text = match.group(1) or match.group(2)
-
-            if not chapter_number_text:
-                continue
-
-            chapter_number = int(chapter_number_text)
-
-            title_lines = [normalize_title(line)]
-
-            # Add next line as subtitle only if it does not look like TOC.
-            if index + 1 < len(lines):
-                next_line = lines[index + 1].strip()
-
-                if (
-                    len(next_line) < 120
-                    and not is_toc_style_line(next_line)
-                    and not re.fullmatch(r"\d{1,3}", next_line)
-                ):
-                    title_lines.append(normalize_title(next_line))
-
-            title = " - ".join(title_lines)
-
-            already_detected = any(
-                chapter["chapter_number"] == chapter_number
-                for chapter in chapter_starts
-            )
-
-            if not already_detected:
-                chapter_starts.append(
+            if chapter_pattern.match(line):
+                chapter_candidates.append(
                     {
-                        "chapter_number": chapter_number,
-                        "title": title,
+                        "chapter_number": len(chapter_candidates) + 1,
+                        "title": line,
                         "start_page": page_number,
                     }
                 )
+                break
 
-            break
+    chapters = []
 
-    chapters: list[ExtractedChapter] = []
+    for index, chapter in enumerate(chapter_candidates):
+        start_page = chapter["start_page"]
 
-    for index, chapter in enumerate(chapter_starts):
-        start_page = int(chapter["start_page"])
-
-        if index + 1 < len(chapter_starts):
-            end_page = int(chapter_starts[index + 1]["start_page"]) - 1
+        if index + 1 < len(chapter_candidates):
+            end_page = chapter_candidates[index + 1]["start_page"] - 1
         else:
             end_page = pages[-1]["page_number"] if pages else start_page
 
@@ -208,19 +255,22 @@ def detect_chapters_from_pages(pages: list[ExtractedPage]) -> list[ExtractedChap
             if start_page <= page["page_number"] <= end_page
         ]
 
-        chapter_text_parts: list[str] = []
+        chapter_text_parts = []
 
         for page in chapter_pages:
-            chapter_text_parts.append(f"\n--- Page {page['page_number']} ---\n")
-            chapter_text_parts.append(page["text"])
+            page_text = page.get("text", "")
+            if page_text:
+                chapter_text_parts.append(
+                    f"--- Page {page['page_number']} ---\n{page_text}"
+                )
 
         chapters.append(
             {
-                "chapter_number": int(chapter["chapter_number"]),
-                "title": str(chapter["title"]),
+                "chapter_number": chapter["chapter_number"],
+                "title": chapter["title"],
                 "start_page": start_page,
                 "end_page": end_page,
-                "text": "\n".join(chapter_text_parts).strip(),
+                "text": "\n\n".join(chapter_text_parts),
             }
         )
 

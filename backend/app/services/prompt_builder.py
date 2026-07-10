@@ -48,7 +48,23 @@ TRANSLATION RULES:
 8. Do not summarize unless the original text is repetitive or unusable.
 9. Keep grammar explanations accurate and beginner-friendly.
 10. If the source contains tables or lists, preserve the list/table-like structure as much as possible.
-11. Return only the Uyghur translation content. Do not include extra commentary.
+11. If the source contains a section called "--- DETECTED TABLES ---", treat it as structured table data.
+12. Preserve table rows and columns as a readable table.
+13. Translate English table headers into Uyghur.
+14. Do not translate Arabic table cells.
+15. Preserve Arabic cells exactly.
+16. Do not merge table rows into paragraphs.
+17. Do not remove empty answer spaces in drills or exercises.
+18. Do not use Markdown bold symbols like **.
+19. Do not add commentary about the translation process.
+20. Return clean textbook content only.
+21. Return only the Uyghur translation content. Do not include extra commentary.
+
+TABLE HANDLING:
+If structured table data appears, preserve it as a table-like block using rows and columns.
+Keep Arabic grammar examples unchanged.
+Translate only English labels, headings, and explanations.
+Do not flatten tables into normal paragraphs.
 
 SOURCE TEXT:
 {text}
