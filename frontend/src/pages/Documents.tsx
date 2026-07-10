@@ -6,9 +6,37 @@ import type {
   UploadedDocument,
 } from '../types/document'
 
+type TranslatedTable = {
+  tableNumber: number
+  pageNumber: number
+  translatedRows: string[][]
+  provider: string
+  message: string
+}
+
+type TableTranslationApiResponse = {
+  message: string
+  table_number: number
+  translated_rows: string[][]
+  provider: string
+  prompt_preview: string
+}
+
+
+
+
 function Documents() {
   const [uploadedDocument, setUploadedDocument] =
     useState<UploadedDocument | null>(null)
+
+  const [translatedTables, setTranslatedTables] = useState<
+    Record<string, TranslatedTable>
+  >({})
+
+  const [translatingTableKey, setTranslatingTableKey] = useState('')
+  const [tableTranslationStatus, setTableTranslationStatus] = useState('')
+
+
 
   const navigate = useNavigate()
 
@@ -58,6 +86,65 @@ function Documents() {
     )
   }
 
+  const getTableKey = (pageNumber: number, tableNumber: number) => {
+  return `page-${pageNumber}-table-${tableNumber}`
+  }
+
+  const handleTranslateTable = async (
+    pageNumber: number,
+    tableNumber: number,
+    rows: string[][],
+  ) => {
+  const tableKey = getTableKey(pageNumber, tableNumber)
+
+  try {
+    setTranslatingTableKey(tableKey)
+    setTableTranslationStatus('Translating table...')
+
+    const response = await fetch('http://localhost:8000/api/translate/table', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        table_number: tableNumber,
+        rows,
+        target_language: 'Uyghur',
+        preserve_arabic_terms: true,
+      }),
+    })
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null)
+
+      throw new Error(errorData?.detail || 'Table translation failed.')
+    }
+
+    const data: TableTranslationApiResponse = await response.json()
+
+    setTranslatedTables((currentTables) => ({
+      ...currentTables,
+      [tableKey]: {
+        tableNumber,
+        pageNumber,
+        translatedRows: data.translated_rows,
+        provider: data.provider,
+        message: data.message,
+      },
+    }))
+
+    setTableTranslationStatus(data.message)
+  } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : 'Table translation failed. Make sure the backend server is running.'
+
+    setTableTranslationStatus(message)
+  } finally {
+    setTranslatingTableKey('')
+  }
+}
   return (
     <section>
       <h2 className="mb-8 text-3xl font-bold">Documents</h2>
@@ -156,6 +243,12 @@ function Documents() {
             )}
           </div>
 
+          {tableTranslationStatus && (
+            <div className="mb-6 rounded-lg border border-blue-200 bg-white p-4">
+              <strong>Table Translation Status:</strong> {tableTranslationStatus}
+            </div>
+          )}
+          
           <div>
             <h3 className="mb-3 mt-8 text-xl font-bold">
               Extracted Pages Preview
@@ -173,41 +266,102 @@ function Documents() {
                     <p className="mt-2 text-sm text-slate-500">
                        Tables detected: {page.table_count || 0}
                     </p>
+
                     {page.tables && page.tables.length > 0 && (
                       <div className="mt-4 space-y-4">
-                        {page.tables.map((table) => (
-                          <div
-                            key={table.table_number}
-                            className="rounded-lg border bg-white p-3"
-                          >
-                            <p className="mb-2 text-sm font-semibold">
-                              Table {table.table_number} — {table.row_count} rows ×{' '}
-                              {table.column_count} columns
-                            </p>
+                        {page.tables.map((table) => {
+                          const tableKey = getTableKey(page.page_number, table.table_number)
+                          const translatedTable = translatedTables[tableKey]
+                          const isThisTableTranslating = translatingTableKey === tableKey
 
-                            <div className="max-h-80 max-w-full overflow-auto rounded border">
-                              <table className="min-w-max border-collapse text-sm">
-                                <tbody>
-                                  {table.rows.map((row, rowIndex) => (
-                                    <tr key={rowIndex}>
-                                      {row.map((cell, cellIndex) => (
-                                        <td
-                                          key={cellIndex}
-                                          className="min-w-32 border px-3 py-2 align-top"
-                                          dir="auto"
-                                        >
-                                          {cell || ''}
-                                        </td>
-                                      ))}
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
+                          return (
+                            <div
+                              key={table.table_number}
+                              className="rounded-lg border bg-white p-3"
+                            >
+                              <div className="mb-3 flex items-center justify-between gap-4">
+                                <p className="text-sm font-semibold">
+                                  Table {table.table_number} — {table.row_count} rows ×{' '}
+                                  {table.column_count} columns
+                                </p>
+
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    handleTranslateTable(
+                                      page.page_number,
+                                      table.table_number,
+                                      table.rows,
+                                    )
+                                  }
+                                  disabled={isThisTableTranslating}
+                                  className={`rounded-lg px-4 py-2 text-sm font-semibold text-white ${
+                                    isThisTableTranslating
+                                      ? 'cursor-not-allowed bg-blue-300'
+                                      : 'bg-blue-600 hover:bg-blue-700'
+                                  }`}
+                                >
+                                  {isThisTableTranslating ? 'Translating...' : 'Translate Table'}
+                                </button>
+                              </div>
+
+                              <div className="max-h-80 max-w-full overflow-auto rounded border">
+                                <table className="min-w-max border-collapse text-sm">
+                                  <tbody>
+                                    {table.rows.map((row, rowIndex) => (
+                                      <tr key={rowIndex}>
+                                        {row.map((cell, cellIndex) => (
+                                          <td
+                                            key={cellIndex}
+                                            className="min-w-32 border px-3 py-2 align-top"
+                                            dir="auto"
+                                          >
+                                            {cell || ''}
+                                          </td>
+                                        ))}
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+
+                              {translatedTable && (
+                                <div className="mt-4 rounded-lg border border-green-200 bg-green-50 p-3">
+                                  <div className="mb-3 flex items-center justify-between gap-4">
+                                    <p className="text-sm font-semibold text-green-800">
+                                      Translated Table — Provider: {translatedTable.provider}
+                                    </p>
+                                  </div>
+
+                                  <div className="max-h-80 max-w-full overflow-auto rounded border bg-white">
+                                    <table className="min-w-max border-collapse text-sm">
+                                      <tbody>
+                                        {translatedTable.translatedRows.map((row, rowIndex) => (
+                                          <tr key={rowIndex}>
+                                            {row.map((cell, cellIndex) => (
+                                              <td
+                                                key={cellIndex}
+                                                className="min-w-32 border px-3 py-2 align-top"
+                                                dir="auto"
+                                              >
+                                                {cell || ''}
+                                              </td>
+                                            ))}
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                </div>
+                              )}
                             </div>
-                          </div>
-                        ))}
+                          )
+                        })}
                       </div>
                     )}
+  
+
+                    
                     <button
                       type="button"
                       onClick={() => handleTranslatePage(page)}

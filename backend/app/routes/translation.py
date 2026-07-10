@@ -124,7 +124,18 @@ async def translate_table(payload: TableTranslationRequest):
         ) from error
 
     except Exception as error:
+        print("TABLE TRANSLATION ERROR:", repr(error))
+
+        raise HTTPException(
+            status_code=500,
+            detail=f"Table translation failed: {str(error)}",
+        ) from error
+
+
+    """
+    except Exception as error:
         raise HTTPException(
             status_code=500,
             detail="Table translation failed because of an unexpected backend error.",
         ) from error
+    """
