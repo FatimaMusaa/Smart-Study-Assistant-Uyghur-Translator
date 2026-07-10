@@ -69,3 +69,47 @@ Do not flatten tables into normal paragraphs.
 SOURCE TEXT:
 {text}
 """.strip()
+
+def build_table_translation_prompt(
+    *,
+    rows: list[list[str]],
+    target_language: str,
+    preserve_arabic_terms: bool = True,
+) -> str:
+    arabic_rule = (
+        "Preserve all Arabic-script text exactly as it appears inside each cell. "
+        "Translate only English words or English phrases inside the same cell into Uyghur. "
+        "Do not translate, rewrite, normalize, reshape, vocalize, remove diacritics from, or correct Arabic-script text."
+        if preserve_arabic_terms
+        else "Translate cells when appropriate."
+    )
+
+    return f"""
+You are translating table cell content from a Quranic Arabic study textbook into {target_language}.
+
+TASK:
+Translate only the English text inside the table cells into {target_language}.
+
+STRICT TABLE RULES:
+1. Return the same number of rows.
+2. Return the same number of columns in every row.
+3. Do not merge cells.
+4. Do not split cells.
+5. Do not reorder rows or columns.
+6. Preserve Arabic-script text inside every cell exactly unchanged.
+7. Translate English words and English phrases into Uyghur, even if they appear in the same cell as Arabic text.
+8. Keep empty cells empty.
+9. Keep proper names unchanged unless there is a standard Uyghur form.
+10. Do not use Markdown.
+11. Do not add explanations.
+12. Return only valid JSON.
+13. The JSON must have this exact shape:
+{{
+  "translated_rows": [
+    ["cell 1", "cell 2"]
+  ]
+}}
+
+SOURCE TABLE ROWS:
+{rows}
+""".strip()
