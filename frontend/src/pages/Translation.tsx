@@ -1,6 +1,19 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import type { ExtractedChapter, ExtractedPage } from '../types/document'
+import type {
+  ExtractedChapter,
+  ExtractedPage,
+  ExtractedTable,
+} from '../types/document'
+
+type TranslatedTable = {
+  tableNumber: number
+  pageNumber: number
+  originalRows: string[][]
+  translatedRows: string[][]
+  provider: string
+  message: string
+}
 
 type TranslatedContent = {
   title: string
@@ -9,6 +22,8 @@ type TranslatedContent = {
   sourceType: 'chapter' | 'page'
   sourceNumber: number
   reviewStatus?: 'not_reviewed' | 'reviewed'
+  originalTables?: ExtractedTable[]
+  translatedTables?: TranslatedTable[]
 }
 
 type TranslationApiResponse = {
@@ -24,6 +39,14 @@ type TranslationApiResponse = {
   provider: string
 }
 
+type TableTranslationApiResponse = {
+  message: string
+  table_number: number
+  translated_rows: string[][]
+  provider: string
+  prompt_preview: string
+}
+
 function Translation() {
   const [selectedPage, setSelectedPage] = useState<ExtractedPage | null>(null)
   const [selectedChapter, setSelectedChapter] =
@@ -35,6 +58,12 @@ function Translation() {
   )
   const [translationProvider, setTranslationProvider] = useState('')
   const [isTranslating, setIsTranslating] = useState(false)
+
+  const [translatedTables, setTranslatedTables] = useState<
+    Record<string, TranslatedTable>
+  >({})
+  const [translatingTableKey, setTranslatingTableKey] = useState('')
+  const [tableTranslationStatus, setTableTranslationStatus] = useState('')
 
   const navigate = useNavigate()
 
@@ -73,6 +102,32 @@ function Translation() {
     ? selectedChapter.chapter_number
     : selectedPage?.page_number || 0
 
+  const getTableKey = (pageNumber: number, tableNumber: number) => {
+    return `page-${pageNumber}-table-${tableNumber}`
+  }
+
+  const getTranslatedTablesArray = () => {
+    return Object.values(translatedTables)
+  }
+
+  const saveTranslatedContent = (
+    nextTranslatedText: string,
+    nextTranslatedTables: Record<string, TranslatedTable>,
+  ) => {
+    const translatedContent: TranslatedContent = {
+      title: selectedTitle,
+      originalText,
+      translatedText: nextTranslatedText,
+      sourceType,
+      sourceNumber,
+      reviewStatus: 'not_reviewed',
+      originalTables: selectedPage?.tables || [],
+      translatedTables: Object.values(nextTranslatedTables),
+    }
+
+    localStorage.setItem('translatedContent', JSON.stringify(translatedContent))
+  }
+
   const handleStartTranslation = async () => {
     if (!selectedChapter && !selectedPage) {
       setTranslationStatus('Please select a chapter or page first.')
@@ -104,9 +159,7 @@ function Translation() {
       if (!response.ok) {
         const errorData = await response.json().catch(() => null)
 
-        throw new Error(
-          errorData?.detail || 'Translation request failed.',
-        )
+        throw new Error(errorData?.detail || 'Translation request failed.')
       }
 
       const data: TranslationApiResponse = await response.json()
@@ -115,16 +168,7 @@ function Translation() {
       setTranslationStatus(data.message)
       setTranslationProvider(data.provider)
 
-      const translatedContent: TranslatedContent = {
-        title: selectedTitle,
-        originalText,
-        translatedText: data.translated_text,
-        sourceType,
-        sourceNumber,
-        reviewStatus: 'not_reviewed',
-      }
-
-      localStorage.setItem('translatedContent', JSON.stringify(translatedContent))
+      saveTranslatedContent(data.translated_text, translatedTables)
     } catch (error) {
       const message =
         error instanceof Error
@@ -133,8 +177,83 @@ function Translation() {
 
       setTranslationStatus(message)
       setTranslationProvider('')
+    } finally {
+      setIsTranslating(false)
     }
-    
+  }
+
+  const handleTranslateTable = async (table: ExtractedTable) => {
+    if (!selectedPage) {
+      setTableTranslationStatus('Table translation is only available for pages.')
+      return
+    }
+
+    const tableKey = getTableKey(selectedPage.page_number, table.table_number)
+
+    try {
+      setTranslatingTableKey(tableKey)
+      setTableTranslationStatus('Translating table...')
+
+      const response = await fetch('http://localhost:8000/api/translate/table', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          table_number: table.table_number,
+          rows: table.rows,
+          target_language: 'Uyghur',
+          preserve_arabic_terms: true,
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null)
+
+        throw new Error(errorData?.detail || 'Table translation failed.')
+      }
+
+      const data: TableTranslationApiResponse = await response.json()
+
+      const nextTranslatedTable: TranslatedTable = {
+        tableNumber: table.table_number,
+        pageNumber: selectedPage.page_number,
+        originalRows: table.rows,
+        translatedRows: data.translated_rows,
+        provider: data.provider,
+        message: data.message,
+      }
+
+      const nextTranslatedTables = {
+        ...translatedTables,
+        [tableKey]: nextTranslatedTable,
+      }
+
+      setTranslatedTables(nextTranslatedTables)
+      setTableTranslationStatus(data.message)
+
+      saveTranslatedContent(translatedText, nextTranslatedTables)
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Table translation failed. Make sure the backend server is running.'
+
+      setTableTranslationStatus(message)
+    } finally {
+      setTranslatingTableKey('')
+    }
+  }
+
+  const handleTranslateAllTables = async () => {
+    if (!selectedPage || !selectedPage.tables || selectedPage.tables.length === 0) {
+      setTableTranslationStatus('No tables found on this page.')
+      return
+    }
+
+    for (const table of selectedPage.tables) {
+      await handleTranslateTable(table)
+    }
   }
 
   const handleContinueToReview = () => {
@@ -143,6 +262,7 @@ function Translation() {
       return
     }
 
+    saveTranslatedContent(translatedText, translatedTables)
     navigate('/review-edit')
   }
 
@@ -212,6 +332,143 @@ function Translation() {
           </div>
         </div>
       </div>
+
+      {selectedPage?.tables && selectedPage.tables.length > 0 && (
+        <div className="mt-10 rounded-xl bg-white p-6 shadow">
+          <div className="mb-4 flex items-center justify-between gap-4">
+            <div>
+              <h3 className="text-xl font-bold">Page Tables</h3>
+              <p className="text-sm text-slate-500">
+                Tables detected on this page: {selectedPage.tables.length}
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleTranslateAllTables}
+              disabled={!!translatingTableKey}
+              className={`rounded-lg px-5 py-3 text-white ${
+                translatingTableKey
+                  ? 'cursor-not-allowed bg-blue-300'
+                  : 'bg-blue-600 hover:bg-blue-700'
+              }`}
+            >
+              {translatingTableKey ? 'Translating...' : 'Translate All Tables'}
+            </button>
+          </div>
+
+          {tableTranslationStatus && (
+            <div className="mb-6 rounded-lg border border-blue-200 bg-blue-50 p-4">
+              <strong>Table Status:</strong> {tableTranslationStatus}
+            </div>
+          )}
+
+          <div className="space-y-8">
+            {selectedPage.tables.map((table) => {
+              const tableKey = getTableKey(
+                selectedPage.page_number,
+                table.table_number,
+              )
+              const translatedTable = translatedTables[tableKey]
+              const isThisTableTranslating = translatingTableKey === tableKey
+
+              return (
+                <div
+                  key={table.table_number}
+                  className="rounded-xl border bg-slate-50 p-4"
+                >
+                  <div className="mb-4 flex items-center justify-between gap-4">
+                    <p className="font-semibold">
+                      Table {table.table_number} — {table.row_count} rows ×{' '}
+                      {table.column_count} columns
+                    </p>
+
+                    <button
+                      type="button"
+                      onClick={() => handleTranslateTable(table)}
+                      disabled={isThisTableTranslating}
+                      className={`rounded-lg px-4 py-2 text-sm font-semibold text-white ${
+                        isThisTableTranslating
+                          ? 'cursor-not-allowed bg-blue-300'
+                          : 'bg-blue-600 hover:bg-blue-700'
+                      }`}
+                    >
+                      {isThisTableTranslating
+                        ? 'Translating...'
+                        : 'Translate Table'}
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+                    <div>
+                      <h4 className="mb-2 font-semibold">Original Table</h4>
+
+                      <div className="max-h-80 max-w-full overflow-auto rounded border bg-white">
+                        <table className="min-w-max border-collapse text-sm">
+                          <tbody>
+                            {table.rows.map((row, rowIndex) => (
+                              <tr key={rowIndex}>
+                                {row.map((cell, cellIndex) => (
+                                  <td
+                                    key={cellIndex}
+                                    className="min-w-32 border px-3 py-2 align-top"
+                                    dir="auto"
+                                  >
+                                    {cell || ''}
+                                  </td>
+                                ))}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
+                    <div>
+                      <h4 className="mb-2 font-semibold">Translated Table</h4>
+
+                      {translatedTable ? (
+                        <div className="rounded-lg border border-green-200 bg-green-50 p-3">
+                          <p className="mb-2 text-sm font-semibold text-green-800">
+                            Provider: {translatedTable.provider}
+                          </p>
+
+                          <div className="max-h-80 max-w-full overflow-auto rounded border bg-white">
+                            <table className="min-w-max border-collapse text-sm">
+                              <tbody>
+                                {translatedTable.translatedRows.map(
+                                  (row, rowIndex) => (
+                                    <tr key={rowIndex}>
+                                      {row.map((cell, cellIndex) => (
+                                        <td
+                                          key={cellIndex}
+                                          className="min-w-32 border px-3 py-2 align-top"
+                                          dir="auto"
+                                        >
+                                          {cell || ''}
+                                        </td>
+                                      ))}
+                                    </tr>
+                                  ),
+                                )}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex min-h-32 items-center justify-center rounded border bg-white p-4 text-sm text-slate-500">
+                          Click Translate Table to generate a structured table
+                          translation.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       <div className="mt-6 rounded-xl bg-white p-4 shadow">
         <strong>Preserved Arabic Terms:</strong> اسم | فعل | حرف | رفع | نصب | جر
