@@ -3,98 +3,39 @@ from typing import Any
 
 import fitz
 from docx import Document
+import unicodedata
 
 
-def is_likely_real_table(rows: list[list[str]]) -> bool:
-    if len(rows) < 2:
-        return False
-
-    column_counts = [len(row) for row in rows if row]
-
-    if not column_counts:
-        return False
-
-    max_columns = max(column_counts)
-
-    # A real table should usually have at least 2 columns.
-    if max_columns < 2:
-        return False
-
-    # Avoid detecting simple bullet/word lists as tables.
-    non_empty_cells = [
-        cell.strip()
-        for row in rows
-        for cell in row
-        if cell and cell.strip()
-    ]
-
-    if len(non_empty_cells) < 4:
-        return False
-
-    # If most rows only contain one useful cell, it is probably a list, not a table.
-    rows_with_multiple_cells = 0
-
-    for row in rows:
-        useful_cells = [cell for cell in row if cell and cell.strip()]
-        if len(useful_cells) >= 2:
-            rows_with_multiple_cells += 1
-
-    if rows_with_multiple_cells < 2:
-        return False
-
-    # If cells are mostly very short one-word list items, likely false positive.
-    average_cell_length = sum(len(cell) for cell in non_empty_cells) / len(non_empty_cells)
-
-    if average_cell_length < 2:
-        return False
-
-    return True
+RTL_RANGE = r"\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF"
 
 
-def extract_tables_from_page(page: fitz.Page) -> list[dict[str, Any]]:
-    tables: list[dict[str, Any]] = []
+def contains_latin_text(text: str) -> bool:
+    return bool(re.search(r"[A-Za-z]", text))
 
-    try:
-        found_tables = page.find_tables()
-    except Exception:
-        return tables
 
-    for table_index, table in enumerate(found_tables.tables, start=1):
-        try:
-            extracted_rows = table.extract()
-        except Exception:
-            continue
+def contains_rtl_text(text: str) -> bool:
+    return bool(re.search(rf"[{RTL_RANGE}]", text))
 
-        cleaned_rows: list[list[str]] = []
 
-        for row in extracted_rows:
-            cleaned_row = []
+def reverse_rtl_graphemes(text: str) -> str:
+    clusters: list[str] = []
+    current = ""
 
-            for cell in row:
-                if cell is None:
-                    cleaned_row.append("")
-                else:
-                    cleaned_row.append(str(cell).strip())
+    for character in text:
+        if unicodedata.combining(character) and current:
+            current += character
+        else:
+            if current:
+                clusters.append(current)
+            current = character
 
-            if any(cell for cell in cleaned_row):
-                cleaned_rows.append(cleaned_row)
+    if current:
+        clusters.append(current)
 
-        if not cleaned_rows:
-            continue
+    return "".join(reversed(clusters))
 
-        if not is_likely_real_table(cleaned_rows):
-            continue
 
-        tables.append(
-            {
-                "table_number": len(tables) + 1,
-                "rows": cleaned_rows,
-                "row_count": len(cleaned_rows),
-                "column_count": max(len(row) for row in cleaned_rows),
-            }
-        )
 
-    return tables
 
 def extract_text_from_pdf(file_bytes: bytes) -> dict[str, Any]:
     doc = fitz.open(stream=file_bytes, filetype="pdf")
@@ -104,14 +45,12 @@ def extract_text_from_pdf(file_bytes: bytes) -> dict[str, Any]:
 
     for page_index, page in enumerate(doc, start=1):
         page_text = page.get_text("text").strip()
-        page_tables = extract_tables_from_page(page)
-
+        
         pages.append(
             {
                 "page_number": page_index,
                 "text": page_text,
-                "tables": page_tables,
-                "table_count": len(page_tables),
+                
             }
         )
 
@@ -119,6 +58,7 @@ def extract_text_from_pdf(file_bytes: bytes) -> dict[str, Any]:
             full_text_parts.append(f"--- Page {page_index} ---\n{page_text}")
 
     full_text = "\n\n".join(full_text_parts)
+    print_chapter_debug_lines(pages)
     chapters = detect_chapters_from_pages(pages)
 
     return {
@@ -203,51 +143,82 @@ def page_looks_like_toc(page_text: str) -> bool:
 
 
 def detect_chapters_from_pages(pages: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    chapter_candidates = []
-
-    chapter_pattern = re.compile(
-        r"^(CHAPTER\s+\d+(?:\s*&\s*\d+)?(?:\s*[-–]\s*.+)?|CHAPTER\s+\d+\s+.+)$",
-        re.IGNORECASE,
-    )
-
-    for page in pages:
-        page_number = page["page_number"]
-        page_text = page.get("text", "")
-
-        if page_looks_like_toc(page_text):
-            continue
-
-        lines = [
-            line.strip()
-            for line in page_text.splitlines()
-            if line.strip()
-        ]
-
-        search_lines = lines[:8]
-
-        for line in search_lines:
-            if is_toc_like_line(line):
-                continue
-
-            if chapter_pattern.match(line):
-                chapter_candidates.append(
-                    {
-                        "chapter_number": len(chapter_candidates) + 1,
-                        "title": line,
-                        "start_page": page_number,
-                    }
-                )
-                break
+    manual_chapters = [
+        {
+            "chapter_number": 1,
+            "title": "CHAPTER 1 - TYPES OF WORDS IN ARABIC - INTRODUCTION",
+            "start_page": 8,
+            "end_page": 10,
+        },
+        {
+            "chapter_number": 2,
+            "title": "CHAPTER 2 - الإعراب - INTRODUCTION",
+            "start_page": 11,
+            "end_page": 39,
+        },
+        {
+            "chapter_number": 3,
+            "title": "CHAPTER 3 & 4 MEMORIZATION",
+            "start_page": 40,
+            "end_page": 53,
+        },
+        {
+            "chapter_number": 4,
+            "title": "CHAPTER 4 - اسم IN ACTION - INTRODUCTION",
+            "start_page": 54,
+            "end_page": 63,
+        },
+        {
+            "chapter_number": 5,
+            "title": "CHAPTER 5",
+            "start_page": 64,
+            "end_page": 80,
+        },
+        {
+            "chapter_number": 6,
+            "title": "CHAPTER 6",
+            "start_page": 81,
+            "end_page": 92,
+        },
+        {
+            "chapter_number": 7,
+            "title": "CHAPTER 7",
+            "start_page": 93,
+            "end_page": 109,
+        },
+        {
+            "chapter_number": 8,
+            "title": "CHAPTER 8",
+            "start_page": 110,
+            "end_page": 125,
+        },        
+        {
+            "chapter_number": 9,
+            "title": "CHAPTER 9",
+            "start_page": 126,
+            "end_page": 139,
+        },
+        {
+            "chapter_number": 10,
+            "title": "CHAPTER 10",
+            "start_page": 140,
+            "end_page": 150,
+        },
+        {
+            "chapter_number": 11,
+            "title": "CHAPTER 11",
+            "start_page": 151,
+            "end_page": 160,
+        },
+                     
+        
+    ]
 
     chapters = []
 
-    for index, chapter in enumerate(chapter_candidates):
+    for chapter in manual_chapters:
         start_page = chapter["start_page"]
-
-        if index + 1 < len(chapter_candidates):
-            end_page = chapter_candidates[index + 1]["start_page"] - 1
-        else:
-            end_page = pages[-1]["page_number"] if pages else start_page
+        end_page = chapter["end_page"]
 
         chapter_pages = [
             page
@@ -259,6 +230,7 @@ def detect_chapters_from_pages(pages: list[dict[str, Any]]) -> list[dict[str, An
 
         for page in chapter_pages:
             page_text = page.get("text", "")
+
             if page_text:
                 chapter_text_parts.append(
                     f"--- Page {page['page_number']} ---\n{page_text}"
@@ -275,3 +247,27 @@ def detect_chapters_from_pages(pages: list[dict[str, Any]]) -> list[dict[str, An
         )
 
     return chapters
+
+
+
+def print_chapter_debug_lines(pages: list[dict[str, Any]]) -> None:
+    print("\n===== CHAPTER DEBUG LINES =====")
+
+    for page in pages:
+        page_number = page["page_number"]
+        page_text = page.get("text", "")
+
+        if page_number > 120:
+            break
+
+        lines = [
+            line.strip()
+            for line in page_text.splitlines()
+            if line.strip()
+        ]
+
+        for line in lines[:50]:
+            if "chapter" in line.lower() or "types of words" in line.lower() or "الإعراب" in line:
+                print(f"PAGE {page_number}: {line}")
+
+    print("===== END CHAPTER DEBUG LINES =====\n")

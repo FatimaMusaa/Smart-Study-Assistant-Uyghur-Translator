@@ -3,7 +3,7 @@ from typing import Literal
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from app.services.translation_service import translate_table_to_uyghur, translate_to_uyghur
+from app.services.translation_service import translate_to_uyghur
 
 
 router = APIRouter()
@@ -32,20 +32,6 @@ class TranslationResponse(BaseModel):
     prompt_preview: str
     provider: str
 
-
-class TableTranslationRequest(BaseModel):
-    table_number: int
-    rows: list[list[str]]
-    target_language: str = "Uyghur"
-    preserve_arabic_terms: bool = True
-
-
-class TableTranslationResponse(BaseModel):
-    message: str
-    table_number: int
-    translated_rows: list[list[str]]
-    provider: str
-    prompt_preview: str
 
 
 @router.post("/translate", response_model=TranslationResponse)
@@ -94,48 +80,3 @@ async def translate_text(payload: TranslationRequest):
         ) from error
 
 
-@router.post("/translate/table", response_model=TableTranslationResponse)
-async def translate_table(payload: TableTranslationRequest):
-    try:
-        result = translate_table_to_uyghur(
-            payload.rows,
-            target_language=payload.target_language,
-            preserve_arabic_terms=payload.preserve_arabic_terms,
-        )
-
-        return TableTranslationResponse(
-            message=f"{result['provider'].capitalize()} table translation generated successfully.",
-            table_number=payload.table_number,
-            translated_rows=result["translated_rows"],
-            provider=result["provider"],
-            prompt_preview=result["prompt_preview"],
-        )
-
-    except RuntimeError as error:
-        raise HTTPException(
-            status_code=503,
-            detail=str(error),
-        ) from error
-
-    except ValueError as error:
-        raise HTTPException(
-            status_code=400,
-            detail=str(error),
-        ) from error
-
-    except Exception as error:
-        print("TABLE TRANSLATION ERROR:", repr(error))
-
-        raise HTTPException(
-            status_code=500,
-            detail=f"Table translation failed: {str(error)}",
-        ) from error
-
-
-    """
-    except Exception as error:
-        raise HTTPException(
-            status_code=500,
-            detail="Table translation failed because of an unexpected backend error.",
-        ) from error
-    """
