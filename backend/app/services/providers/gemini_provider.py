@@ -19,6 +19,9 @@ def translate_with_gemini(text: str, prompt: str, api_key: str) -> str:
             response = client.models.generate_content(
                 model="gemini-2.5-flash",
                 contents=prompt,
+                config={
+                    "temperature": 0.2,
+                },
             )
 
             translated_text = response.text

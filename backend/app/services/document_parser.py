@@ -34,7 +34,26 @@ def reverse_rtl_graphemes(text: str) -> str:
 
     return "".join(reversed(clusters))
 
+def clean_extracted_text_noise(text: str) -> str:
+    if not text:
+        return ""
 
+    cleaned = str(text)
+
+    # In this textbook PDF extraction, "2" often represents Arabic/Quranic alif "ا"
+    # when it appears beside Arabic-script text.
+    cleaned = re.sub(r"2(?=[\u0600-\u06FF])", "ا", cleaned)
+    cleaned = re.sub(r"(?<=[\u0600-\u06FF])2", "ا", cleaned)
+
+    # Clean broken quote artifacts only.
+    cleaned = cleaned.replace("«»", "")
+    cleaned = cleaned.replace("«", "")
+    cleaned = cleaned.replace("»", "")
+
+    cleaned = re.sub(r"[ \t]+", " ", cleaned)
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
+
+    return cleaned.strip()
 
 
 def extract_text_from_pdf(file_bytes: bytes) -> dict[str, Any]:
@@ -44,7 +63,7 @@ def extract_text_from_pdf(file_bytes: bytes) -> dict[str, Any]:
     full_text_parts = []
 
     for page_index, page in enumerate(doc, start=1):
-        page_text = page.get_text("text").strip()
+        page_text = clean_extracted_text_noise(page.get_text())
         
         pages.append(
             {

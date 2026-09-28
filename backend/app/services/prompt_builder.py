@@ -13,8 +13,9 @@ def build_translation_prompt(
     preserve_quranic_examples: bool = True,
 ) -> str:
     arabic_preservation_rule = (
-        "Preserve Arabic grammar terms exactly as Arabic script, such as اسم, فعل, حرف, رفع, نصب, جر. "
-        "Do not transliterate or replace these Arabic terms unless an Uyghur explanation is needed beside them."
+        "Preserve Arabic grammar terms exactly as Arabic script. "
+        "Do not translate, transliterate, rewrite, or alter Arabic grammar terms. "
+        "If explanation is needed, keep the Arabic term first, then explain in Uyghur."
         if preserve_arabic_terms
         else "Arabic terms may be translated when needed."
     )
@@ -25,9 +26,25 @@ def build_translation_prompt(
         if preserve_quranic_examples
         else "Quranic examples may be translated if needed."
     )
+    approved_glossary = """
+APPROVED ARABIC TERM GLOSSARY:
+- إعراب — سۆزنىڭ جۈملىدىكى ھالىتى.
+- الإعراب — سۆزنىڭ جۈملىدىكى ھالىتى.
+- حرف جر — ئىسىمنى جر قىلىدىغان قوشۇمچىلار.
+- مضاف إليه — ئىزافەت قۇرۇلمىسىدىن كېيىن كەلگەن سۆز.
+- مضاف — ئىزافەت قۇرۇلمىسىدا ئالدىن كەلگەن سۆز.
+- مشتق — تۈپ يىلتىزدىن تۈرلەنگەن سۆز.
+- اسم — ئىسىم.
+- فعل — پېئىل.
+- حرف — قوشۇمچە/ھەرپ.
+- رفع — رفع ھالىتى.
+- نصب — نصب ھالىتى.
+- جر — جر ھالىتى.
+"""
+
 
     return f"""
-You are translating a Quranic Arabic study textbook into Uyghur.
+You are translating a Quranic Arabic study textbook into {target_language}.
 
 TASK:
 Translate the provided {source_type} content from {source_language} into {target_language}.
@@ -41,32 +58,52 @@ TRANSLATION RULES:
 1. Translate English explanations into clear, natural Uyghur.
 2. Keep the tone suitable for students learning Quranic Arabic.
 3. Use textbook-style Uyghur, not casual speech.
-4. Preserve the teaching structure, headings, examples, numbering, and paragraph breaks.
+4. Preserve the teaching structure, headings, examples, numbering, and paragraph breaks when useful.
 5. {arabic_preservation_rule}
 6. {quranic_preservation_rule}
-7. Do not remove Arabic examples.
-8. Do not summarize unless the original text is repetitive or unusable.
-9. Keep grammar explanations accurate and beginner-friendly.
-10. If the source contains tables or lists, preserve the list/table-like structure as much as possible.
-11. If the source contains a section called "--- DETECTED TABLES ---", treat it as structured table data.
-12. Preserve table rows and columns as a readable table.
-13. Translate English table headers into Uyghur.
-14. Do not translate Arabic table cells.
-15. Preserve Arabic cells exactly.
-16. Do not merge table rows into paragraphs.
-17. Do not remove empty answer spaces in drills or exercises.
-18. Do not use Markdown bold symbols like **.
-19. Do not add commentary about the translation process.
-20. Return clean textbook content only.
-21. Return only the Uyghur translation content. Do not include extra commentary.
+7. Preserve Arabic grammar terms exactly as Arabic script.
+8. Do not translate, transliterate, rewrite, or alter Arabic grammar terms.
+9. Keep Arabic examples and Quranic examples exactly as Arabic script.
+10. If an Arabic term needs explanation, keep the Arabic term first, then explain in Uyghur.
+11. Do not mix Uyghur suffixes directly inside Arabic words.
+12. Do not remove Arabic examples.
+13. Do not summarize unless the original text is repetitive or unusable.
+14. Keep grammar explanations accurate and beginner-friendly.
+15. Do not add random symbols, broken punctuation, or OCR-like characters.
+16. Do not use Markdown bold symbols like **.
+17. Do not add commentary about the translation process.
+18. Return clean textbook content only.
+19. Return only the Uyghur translation content. Do not include extra commentary.
+20. When an Arabic grammar term appears, keep the Arabic term exactly as written.
+21. Do not add Uyghur suffixes directly to Arabic grammar terms.
+22. Do not produce forms like إعرابنى, إعرابلىق, مضافقا, or حرف جرنى.
+23. If grammar explanation is needed, use the approved glossary wording.
+24. Keep Arabic terms separated from Uyghur explanation with an em dash.
+25. If the source contains obvious PDF extraction noise such as random digits inside Arabic examples, remove the noise and preserve the Arabic example as clean Arabic.
+26. Do not include random numbers inside Arabic Quranic examples unless they are clearly part of a verse reference.
 
-TABLE HANDLING:
-If structured table data appears, preserve it as a table-like block using rows and columns.
-Keep Arabic grammar examples unchanged.
-Translate only English labels, headings, and explanations.
-Do not flatten tables into normal paragraphs.
+ARABIC TERM PRESERVATION EXAMPLES:
+Correct:
+إعراب — سۆزنىڭ جۈملىدىكى ھالىتى.
 
-SOURCE TEXT:
+Incorrect:
+ئىعرابى، إعرابنى، إعرابلىق
+
+Correct:
+مضاف إليه — ئىزافەت قۇرۇلمىسىدا كېيىن كەلگەن سۆز.
+
+Incorrect:
+مضاف ئىگە، مۇضافقا، مضاف-ئېلىھى
+
+Correct:
+حرف جر — ئىسىمنى جر قىلىدىغان قوشۇمچىلار.
+
+Incorrect:
+جەر ھەرىپى، حرف جرنى، حرف جرلىق
+
+{approved_glossary}
+
+CONTENT TO TRANSLATE:
 {text}
 """.strip()
 
