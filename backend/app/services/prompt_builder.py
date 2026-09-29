@@ -81,6 +81,9 @@ TRANSLATION RULES:
 24. Keep Arabic terms separated from Uyghur explanation with an em dash.
 25. If the source contains obvious PDF extraction noise such as random digits inside Arabic examples, remove the noise and preserve the Arabic example as clean Arabic.
 26. Do not include random numbers inside Arabic Quranic examples unless they are clearly part of a verse reference.
+27. If Arabic Quranic/example text appears corrupted with random Latin letters, numbers, symbols, or broken OCR characters, omit that corrupted Arabic line.
+28. Do not try to reconstruct corrupted Quranic examples.
+29. Translate the surrounding English explanation only when the Arabic example is corrupted.
 
 ARABIC TERM PRESERVATION EXAMPLES:
 Correct:

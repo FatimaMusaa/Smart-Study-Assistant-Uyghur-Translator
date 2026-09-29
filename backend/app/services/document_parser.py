@@ -45,16 +45,71 @@ def clean_extracted_text_noise(text: str) -> str:
     cleaned = re.sub(r"2(?=[\u0600-\u06FF])", "ا", cleaned)
     cleaned = re.sub(r"(?<=[\u0600-\u06FF])2", "ا", cleaned)
 
-    # Clean broken quote artifacts only.
+    # Remove broken quote artifacts.
     cleaned = cleaned.replace("«»", "")
     cleaned = cleaned.replace("«", "")
     cleaned = cleaned.replace("»", "")
+
+    cleaned_lines: list[str] = []
+
+    for line in cleaned.splitlines():
+        stripped = line.strip()
+
+        if not stripped:
+            cleaned_lines.append("")
+            continue
+
+        has_arabic = bool(re.search(r"[\u0600-\u06FF]", stripped))
+        has_latin = bool(re.search(r"[A-Za-z]", stripped))
+        has_digit = bool(re.search(r"\d", stripped))
+
+        has_noise_symbol = bool(
+            re.search(r"[\*\[\]#□¤�\^\\<>|{}_=+~`]", stripped)
+        )
+
+        # Keep normal mixed teaching lines like:
+        # "a فعل that takes two مفعول"
+        looks_like_teaching_line = has_latin and any(
+            word in stripped.lower()
+            for word in [
+                "that",
+                "takes",
+                "means",
+                "called",
+                "example",
+                "word",
+                "verb",
+                "noun",
+                "harf",
+                "ism",
+                "fi",
+                "to ",
+            ]
+        )
+
+        # Remove corrupted Arabic/Quranic example lines.
+        # These usually contain Arabic plus random Latin letters, numbers, ^, boxes, or symbols.
+        if has_arabic and not looks_like_teaching_line:
+            if has_noise_symbol or has_digit:
+                continue
+
+            # Remove lines that are mostly Arabic but contain random Latin fragments.
+            if has_latin:
+                continue
+
+        # Remove mostly-symbol garbage lines.
+        symbol_count = len(re.findall(r"[\*\[\]#□¤�\^\\<>|{}_=+~`]", stripped))
+        if symbol_count >= 2 and len(stripped) < 80:
+            continue
+
+        cleaned_lines.append(line)
+
+    cleaned = "\n".join(cleaned_lines)
 
     cleaned = re.sub(r"[ \t]+", " ", cleaned)
     cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
 
     return cleaned.strip()
-
 
 def extract_text_from_pdf(file_bytes: bytes) -> dict[str, Any]:
     doc = fitz.open(stream=file_bytes, filetype="pdf")
