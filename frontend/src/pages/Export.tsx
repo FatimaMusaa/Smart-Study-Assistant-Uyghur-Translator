@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 
 type TranslatedContent = {
   title: string
@@ -10,23 +11,24 @@ type TranslatedContent = {
 }
 
 function Export() {
+  const navigate = useNavigate()
   const [translatedContent, setTranslatedContent] =
     useState<TranslatedContent | null>(null)
   const [exportStatus, setExportStatus] = useState('')
+  const [isDownloadingDocx, setIsDownloadingDocx] = useState(false)
 
   useEffect(() => {
-    const savedTranslation = localStorage.getItem('translatedContent')
+    const storedTranslatedContent = localStorage.getItem('translatedContent')
 
-    if (!savedTranslation) {
-      return
+    if (storedTranslatedContent) {
+      setTranslatedContent(JSON.parse(storedTranslatedContent))
     }
-
-    setTranslatedContent(JSON.parse(savedTranslation) as TranslatedContent)
   }, [])
 
   const createSafeFilename = (title: string, extension: string) => {
     const safeTitle = title
-      .replace(/[^a-z0-9\u0600-\u06FF]+/gi, '-')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-+|-+$/g, '')
       .slice(0, 80)
 
@@ -35,28 +37,22 @@ function Export() {
 
   const handleDownloadTxt = () => {
     if (!translatedContent) {
+      setExportStatus('No translated content found.')
       return
     }
 
     const fileContent = `
-${translatedContent.title}
-
+Title: ${translatedContent.title}
 Source Type: ${translatedContent.sourceType}
 Source Number: ${translatedContent.sourceNumber}
 Review Status: ${translatedContent.reviewStatus || 'not_reviewed'}
 
-====================
-UYGHUR TRANSLATION
-====================
-
+Uyghur Translation:
 ${translatedContent.translatedText}
 
-====================
-ORIGINAL TEXT
-====================
-
+Original Text:
 ${translatedContent.originalText}
-`
+`.trim()
 
     const blob = new Blob([fileContent], {
       type: 'text/plain;charset=utf-8',
@@ -67,21 +63,24 @@ ${translatedContent.originalText}
 
     link.href = url
     link.download = createSafeFilename(translatedContent.title, 'txt')
-
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
 
     URL.revokeObjectURL(url)
+
+    setExportStatus('TXT downloaded successfully.')
   }
 
   const handleDownloadDocx = async () => {
     if (!translatedContent) {
+      setExportStatus('No translated content found.')
       return
     }
 
     try {
-      setExportStatus('Generating DOCX file...')
+      setIsDownloadingDocx(true)
+      setExportStatus('Preparing DOCX export...')
 
       const response = await fetch('http://localhost:8000/api/export/docx', {
         method: 'POST',
@@ -99,7 +98,9 @@ ${translatedContent.originalText}
       })
 
       if (!response.ok) {
-        throw new Error('DOCX export failed.')
+        const errorText = await response.text().catch(() => '')
+
+        throw new Error(errorText || 'DOCX export failed.')
       }
 
       const blob = await response.blob()
@@ -108,77 +109,87 @@ ${translatedContent.originalText}
 
       link.href = url
       link.download = createSafeFilename(translatedContent.title, 'docx')
-
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
 
       URL.revokeObjectURL(url)
+
       setExportStatus('DOCX downloaded successfully.')
-    } catch {
-      setExportStatus(
-        'DOCX export failed. Make sure the backend server is running.',
-      )
+    } catch (error) {
+      if (error instanceof Error) {
+        setExportStatus(error.message)
+      } else {
+        setExportStatus('DOCX export failed.')
+      }
+    } finally {
+      setIsDownloadingDocx(false)
     }
   }
 
   if (!translatedContent) {
     return (
-      <section className="mx-auto max-w-3xl text-center">
-        <h2 className="mb-10 text-3xl font-bold">
-          Export Final Uyghur Translation
-        </h2>
+      <section className="mx-auto w-full max-w-6xl px-4">
+        <h1 className="mb-6 text-3xl font-bold">Export</h1>
 
-        <div className="rounded-xl bg-white p-10 shadow">
-          <p className="text-slate-600">
-            No reviewed translation found. Go to Review and Edit first.
-          </p>
+        <div className="rounded-xl bg-white p-6 shadow">
+          <p>No translated content found.</p>
+
+          <button
+            type="button"
+            onClick={() => navigate('/translation')}
+            className="mt-4 rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
+          >
+            Go to Translation
+          </button>
         </div>
       </section>
     )
   }
 
   return (
-    <section className="mx-auto max-w-4xl">
-      <h2 className="mb-10 text-center text-3xl font-bold">
-        Export Final Uyghur Translation
-      </h2>
+    <section className="mx-auto w-full max-w-6xl px-4">
+      <h1 className="mb-6 text-3xl font-bold">Export</h1>
 
-      <div className="mb-8 rounded-xl bg-white p-8 shadow">
-        <p>
-          <strong>Selected:</strong> {translatedContent.title}
-        </p>
-        <p>
-          <strong>Source Type:</strong> {translatedContent.sourceType}
-        </p>
-        <p>
-          <strong>Source Number:</strong> {translatedContent.sourceNumber}
-        </p>
-        <p>
-          <strong>Review Status:</strong>{' '}
-          {translatedContent.reviewStatus || 'not_reviewed'}
-        </p>
+      <div className="mb-6 rounded-xl bg-white p-5 shadow">
+        <h2 className="mb-4 text-xl font-bold">{translatedContent.title}</h2>
+
+        <div className="grid grid-cols-1 gap-x-8 gap-y-2 text-sm md:grid-cols-2">
+          <p>
+            <strong>Source Type:</strong> {translatedContent.sourceType}
+          </p>
+
+          <p>
+            <strong>Source Number:</strong> {translatedContent.sourceNumber}
+          </p>
+
+          <p>
+            <strong>Review Status:</strong>{' '}
+            {translatedContent.reviewStatus || 'not_reviewed'}
+          </p>
+        </div>
       </div>
 
       {exportStatus && (
-        <div className="mb-8 rounded-lg border border-blue-200 bg-white p-4">
+        <div className="mb-6 rounded-lg border border-blue-200 bg-blue-50 p-4">
           <strong>Status:</strong> {exportStatus}
         </div>
       )}
 
-      <div className="mb-8 space-y-6">
+      <div className="mb-8 space-y-4">
         <button
           type="button"
           onClick={handleDownloadDocx}
-          className="w-full rounded-xl bg-blue-600 py-5 text-xl font-bold text-white hover:bg-blue-700"
+          disabled={isDownloadingDocx}
+          className="w-full rounded-lg bg-blue-600 px-4 py-4 text-lg font-bold text-white hover:bg-blue-700 disabled:bg-blue-300"
         >
-          Download DOCX
+          {isDownloadingDocx ? 'Preparing DOCX...' : 'Download DOCX'}
         </button>
 
         <button
           type="button"
           onClick={handleDownloadTxt}
-          className="w-full rounded-xl bg-slate-700 py-5 text-xl font-bold text-white hover:bg-slate-800"
+          className="w-full rounded-lg bg-slate-700 px-4 py-4 text-lg font-bold text-white hover:bg-slate-800"
         >
           Download TXT
         </button>
@@ -186,27 +197,29 @@ ${translatedContent.originalText}
         <button
           type="button"
           disabled
-          className="w-full cursor-not-allowed rounded-xl bg-blue-300 py-5 text-xl font-bold text-white"
+          className="w-full rounded-lg bg-blue-300 px-4 py-4 text-lg font-bold text-white"
         >
           Download PDF Coming Soon
         </button>
       </div>
 
-      <div className="grid grid-cols-2 gap-8">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <div>
-          <h3 className="mb-3 text-center font-semibold">Original Text</h3>
-          <div className="max-h-96 overflow-y-auto whitespace-pre-wrap rounded-xl bg-white p-6 shadow">
+          <h2 className="mb-3 text-center text-lg font-bold">Original Text</h2>
+
+          <div className="h-[420px] overflow-y-auto whitespace-pre-wrap rounded-xl bg-white p-5 shadow">
             {translatedContent.originalText}
           </div>
         </div>
 
         <div>
-          <h3 className="mb-3 text-center font-semibold">
+          <h2 className="mb-3 text-center text-lg font-bold">
             Uyghur Translation
-          </h3>
+          </h2>
+
           <div
-            className="max-h-96 overflow-y-auto whitespace-pre-wrap rounded-xl bg-white p-6 shadow"
             dir="rtl"
+            className="h-[420px] overflow-y-auto whitespace-pre-wrap rounded-xl bg-white p-5 text-right shadow"
           >
             {translatedContent.translatedText}
           </div>

@@ -1,15 +1,8 @@
-export type ExtractedTable = {
-  table_number: number
-  rows: string[][]
-  row_count: number
-  column_count: number
-}
 
 export type ExtractedPage = {
   page_number: number
   text: string
-  tables: ExtractedTable[]
-  table_count: number
+
 }
 
 export type ExtractedChapter = {
