@@ -18,6 +18,7 @@ class TranslationRequest(BaseModel):
     source_number: int
     preserve_arabic_terms: bool = True
     preserve_quranic_examples: bool = True
+    glossary_terms: str = ""
 
 
 class TranslationResponse(BaseModel):
@@ -46,6 +47,7 @@ async def translate_text(payload: TranslationRequest):
             source_number=payload.source_number,
             preserve_arabic_terms=payload.preserve_arabic_terms,
             preserve_quranic_examples=payload.preserve_quranic_examples,
+            glossary_terms=payload.glossary_terms,
         )
 
         return TranslationResponse(

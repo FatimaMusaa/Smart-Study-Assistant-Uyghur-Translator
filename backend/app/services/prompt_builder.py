@@ -11,6 +11,7 @@ def build_translation_prompt(
     source_number: int,
     preserve_arabic_terms: bool = True,
     preserve_quranic_examples: bool = True,
+    glossary_terms: str = "",
 ) -> str:
     arabic_preservation_rule = (
         "Preserve Arabic grammar terms exactly as Arabic script. "
@@ -42,6 +43,8 @@ APPROVED ARABIC TERM GLOSSARY:
 - جر — جر ھالىتى.
 """
 
+    if glossary_terms:
+        approved_glossary = glossary_terms
 
     return f"""
 You are translating a Quranic Arabic study textbook into {target_language}.

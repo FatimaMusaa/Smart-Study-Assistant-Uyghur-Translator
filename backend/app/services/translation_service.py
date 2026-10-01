@@ -38,6 +38,8 @@ def translate_to_uyghur(
     source_number: int,
     preserve_arabic_terms: bool,
     preserve_quranic_examples: bool,
+    glossary_terms: str = "",
+
 ) -> TranslationResult:
     settings = get_settings()
 
@@ -52,6 +54,7 @@ def translate_to_uyghur(
         source_number=source_number,
         preserve_arabic_terms=preserve_arabic_terms,
         preserve_quranic_examples=preserve_quranic_examples,
+        glossary_terms=glossary_terms,
     )
 
     if settings.translation_provider == "mock":
