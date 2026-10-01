@@ -76,7 +76,7 @@ async def translate_text(payload: TranslationRequest):
     except Exception as error:
         raise HTTPException(
             status_code=500,
-            detail="Translation failed because of an unexpected backend error.",
+            detail=f"Translation failed: {str(error)}",
         ) from error
 
 
