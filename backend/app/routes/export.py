@@ -18,6 +18,7 @@ class ExportDocxRequest(BaseModel):
     source_type: str
     source_number: int
     review_status: str = "not_reviewed"
+    glossary_terms: str = ""
    
 
 @router.post("/export/docx")
@@ -29,7 +30,7 @@ async def export_docx(payload: ExportDocxRequest):
         source_type=payload.source_type,
         source_number=payload.source_number,
         review_status=payload.review_status,
-        
+        glossary_terms=payload.glossary_terms
     )
 
     filename = f"translated-{payload.source_type}-{payload.source_number}.docx"

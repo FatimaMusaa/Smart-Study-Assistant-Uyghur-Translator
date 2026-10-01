@@ -1,34 +1,69 @@
+from datetime import datetime
 from io import BytesIO
-import re
-from typing import Any
 
 from docx import Document
+from docx.enum.section import WD_SECTION
 from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.shared import Pt
+from docx.enum.text import WD_BREAK
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
-
-def clean_xml_text(value: Any) -> str:
-    text = "" if value is None else str(value)
-
-    # Remove XML-incompatible control characters.
-    text = re.sub(
-        r"[\x00-\x08\x0B\x0C\x0E-\x1F]",
-        "",
-        text,
-    )
-
-    return text
+from docx.shared import Inches, Pt
 
 
-def set_paragraph_bidi(paragraph) -> None:
-    paragraph_format = paragraph._p.get_or_add_pPr()
+def clean_xml_text(value: str) -> str:
+    if not value:
+        return ""
 
-    bidi = paragraph_format.find(qn("w:bidi"))
+    cleaned_characters = []
+
+    for character in str(value):
+        codepoint = ord(character)
+
+        is_allowed_control = character in ("\n", "\t", "\r")
+        is_valid_xml_character = (
+            codepoint == 0x9
+            or codepoint == 0xA
+            or codepoint == 0xD
+            or 0x20 <= codepoint <= 0xD7FF
+            or 0xE000 <= codepoint <= 0xFFFD
+            or 0x10000 <= codepoint <= 0x10FFFF
+        )
+
+        if is_allowed_control or is_valid_xml_character:
+            cleaned_characters.append(character)
+
+    return "".join(cleaned_characters)
+
+def safe_filename(value: str) -> str:
+    if not value:
+        return "translated-document"
+
+    safe_value = ""
+
+    for character in value.lower():
+        if character.isalnum():
+            safe_value += character
+        elif character in (" ", "-", "_"):
+            safe_value += "-"
+
+    while "--" in safe_value:
+        safe_value = safe_value.replace("--", "-")
+
+    safe_value = safe_value.strip("-")
+
+    return safe_value[:80] or "translated-document"
+
+def set_paragraph_rtl(paragraph) -> None:
+    paragraph_format = paragraph.paragraph_format
+    paragraph_format.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+
+    paragraph_properties = paragraph._p.get_or_add_pPr()
+
+    bidi = paragraph_properties.find(qn("w:bidi"))
 
     if bidi is None:
         bidi = OxmlElement("w:bidi")
-        paragraph_format.append(bidi)
+        paragraph_properties.append(bidi)
 
     bidi.set(qn("w:val"), "1")
 
@@ -44,60 +79,112 @@ def set_run_rtl(run) -> None:
 
     rtl.set(qn("w:val"), "1")
 
-def set_table_rtl(table) -> None:
-    table_properties = table._tbl.tblPr
 
-    bidi_visual = table_properties.find(qn("w:bidiVisual"))
+def set_document_styles(document: Document) -> None:
+    styles = document.styles
 
-    if bidi_visual is None:
-        bidi_visual = OxmlElement("w:bidiVisual")
-        table_properties.append(bidi_visual)
+    normal_style = styles["Normal"]
+    normal_style.font.name = "Arial"
+    normal_style.font.size = Pt(13)
 
-    bidi_visual.set(qn("w:val"), "1")
+    title_style = styles["Title"]
+    title_style.font.name = "Arial"
+    title_style.font.size = Pt(22)
+    title_style.font.bold = True
 
+    heading_1_style = styles["Heading 1"]
+    heading_1_style.font.name = "Arial"
+    heading_1_style.font.size = Pt(18)
+    heading_1_style.font.bold = True
 
-
-
-def set_cell_text_direction_rtl(cell) -> None:
-    cell_properties = cell._tc.get_or_add_tcPr()
-
-    text_direction = cell_properties.find(qn("w:textDirection"))
-
-    if text_direction is None:
-        text_direction = OxmlElement("w:textDirection")
-        cell_properties.append(text_direction)
-
-    text_direction.set(qn("w:val"), "rtl")
+    heading_2_style = styles["Heading 2"]
+    heading_2_style.font.name = "Arial"
+    heading_2_style.font.size = Pt(15)
+    heading_2_style.font.bold = True
 
 
-def safe_filename(value: str) -> str:
-    cleaned = re.sub(r'[\\/*?:"<>|]', "", value)
-    cleaned = cleaned.strip().replace(" ", "-")
+def set_document_margins(document: Document) -> None:
+    for section in document.sections:
+        section.top_margin = Inches(0.55)
+        section.bottom_margin = Inches(0.65)
+        section.left_margin = Inches(0.7)
+        section.right_margin = Inches(0.7)
 
-    return cleaned[:80] or "translated-document"
 
+def add_footer(section, source_type: str, source_number: int, review_status: str) -> None:
+    footer = section.footer
+    paragraph = footer.paragraphs[0]
 
-def set_paragraph_rtl(paragraph) -> None:
-    paragraph.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-    set_paragraph_bidi(paragraph)
+    exported_at = datetime.now().strftime("%Y-%m-%d %H:%M")
+
+    paragraph.text = (
+        f"Smart Study Assistant & Uyghur Translator | "
+        f"{source_type.title()} {source_number} | "
+        f"Status: {review_status} | "
+        f"Exported: {exported_at}"
+    )
+
+    paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
     for run in paragraph.runs:
+        run.font.size = Pt(8)
         run.font.name = "Arial"
-        run.font.size = Pt(12)
-        set_run_rtl(run)
 
 
-def add_text_section(document: Document, heading: str, text: str, rtl: bool = False) -> None:
-    document.add_heading(heading, level=2)
+def add_ltr_metadata_paragraph(document: Document, label: str, value: str) -> None:
+    paragraph = document.add_paragraph()
+    paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
 
-    paragraphs = text.split("\n")
+    label_run = paragraph.add_run(f"{label}: ")
+    label_run.bold = True
+    label_run.font.name = "Arial"
+    label_run.font.size = Pt(10)
+
+    value_run = paragraph.add_run(clean_xml_text(value))
+    value_run.font.name = "Arial"
+    value_run.font.size = Pt(10)
+
+
+def add_rtl_heading(document: Document, text: str, level: int = 1) -> None:
+    paragraph = document.add_heading(level=level)
+    set_paragraph_rtl(paragraph)
+
+    run = paragraph.add_run(clean_xml_text(text))
+    run.font.name = "Arial"
+    run.font.size = Pt(18 if level == 1 else 15)
+    run.bold = True
+    set_run_rtl(run)
+
+
+def add_rtl_paragraph(document: Document, text: str) -> None:
+    paragraph = document.add_paragraph()
+    set_paragraph_rtl(paragraph)
+
+    paragraph_format = paragraph.paragraph_format
+    paragraph_format.space_after = Pt(6)
+    paragraph_format.line_spacing = 1.25
+    paragraph_format.left_indent = Inches(0)
+    paragraph_format.right_indent = Inches(0)
+    paragraph_format.first_line_indent = Inches(0)
+
+    run = paragraph.add_run(clean_xml_text(text))
+    run.font.name = "Arial"
+    run.font.size = Pt(13)
+    set_run_rtl(run)
+
+
+def add_translation_body(document: Document, translated_text: str) -> None:
+    cleaned_text = clean_xml_text(translated_text)
+    paragraphs = cleaned_text.split("\n")
 
     for paragraph_text in paragraphs:
-        paragraph = document.add_paragraph(clean_xml_text(paragraph_text))
+        stripped_text = paragraph_text.strip()
 
-        if rtl:
-            set_paragraph_rtl(paragraph)
+        if not stripped_text:
+            document.add_paragraph("")
+            continue
 
+        add_rtl_paragraph(document, stripped_text)
 
 
 def build_docx(
@@ -108,24 +195,35 @@ def build_docx(
     source_type: str,
     source_number: int,
     review_status: str,
-    
+    glossary_terms: str = "",
 ) -> BytesIO:
     document = Document()
 
-    document.add_heading(clean_xml_text(title), level=1)
+    set_document_styles(document)
+    set_document_margins(document)
+    add_footer(document.sections[0], source_type, source_number, review_status)
 
-    document.add_paragraph(clean_xml_text(f"Source Type: {source_type}"))
-    document.add_paragraph(clean_xml_text(f"Source Number: {source_number}"))
-    document.add_paragraph(clean_xml_text(f"Review Status: {review_status}"))
+    title_paragraph = document.add_paragraph()
+    title_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
-    document.add_paragraph("")
+    title_run = title_paragraph.add_run(clean_xml_text(title))
+    title_run.bold = True
+    title_run.font.name = "Arial"
+    title_run.font.size = Pt(18)
 
-    add_text_section(
-        document,
-        "Uyghur Translation",
-        translated_text,
-        rtl=True,
-    )
+    title_paragraph.paragraph_format.space_after = Pt(18)
+    add_translation_body(document, translated_text)
+
+
+    if glossary_terms.strip():
+        document.add_page_break()
+        add_rtl_heading(document, "ئاتالغۇلار", level=1)
+
+        for line in glossary_terms.splitlines():
+            stripped_line = line.strip()
+
+            if stripped_line:
+                add_rtl_paragraph(document, stripped_line)
 
     output = BytesIO()
     document.save(output)
