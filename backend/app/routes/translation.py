@@ -14,6 +14,7 @@ class TranslationRequest(BaseModel):
     text: str
     source_language: str = "Mixed English + Arabic"
     target_language: str = "Uyghur"
+    translation_mode: str = "mixed_quranic_study"
     source_type: Literal["chapter", "page"]
     source_number: int
     preserve_arabic_terms: bool = True
@@ -48,6 +49,7 @@ async def translate_text(payload: TranslationRequest):
             preserve_arabic_terms=payload.preserve_arabic_terms,
             preserve_quranic_examples=payload.preserve_quranic_examples,
             glossary_terms=payload.glossary_terms,
+            translation_mode=payload.translation_mode,
         )
 
         return TranslationResponse(

@@ -1,5 +1,74 @@
 from typing import Literal
 
+def get_translation_mode_instructions(translation_mode: str) -> str:
+    if translation_mode == "english_book":
+        return """
+You are translating a fully English book into clear natural Uyghur.
+
+Rules:
+- Translate English explanations into Uyghur.
+- Keep the meaning accurate and complete.
+- Preserve headings and paragraph structure.
+- Do not preserve English unless it is a technical term, title, name, or necessary reference.
+- Use a clean textbook style.
+- Do not add outside explanations unless the source text requires a brief clarification.
+"""
+
+    if translation_mode == "arabic_book":
+        return """
+You are translating a general Arabic book into clear natural Uyghur.
+
+Rules:
+- Translate Arabic explanation into Uyghur.
+- Preserve proper names and important Arabic terms when needed.
+- Keep headings and paragraph structure.
+- Do not summarize unless the source text is badly broken.
+- Do not add outside commentary.
+"""
+
+    if translation_mode == "arabic_islamic_book":
+        return """
+You are translating a classical Arabic Islamic book into clear natural Uyghur.
+
+Rules:
+- Translate Arabic scholarly explanation into respectful Islamic Uyghur.
+- Preserve Qur'an verses in Arabic when they appear.
+- Preserve hadith wording in Arabic when needed, then translate or explain the surrounding explanation.
+- Preserve key Islamic terms when the glossary says to preserve them.
+- Use consistent Uyghur Islamic terminology.
+- Keep the scholarly tone.
+- Do not add your own tafsir, fatwa, or outside commentary.
+- Do not summarize unless the extracted text is badly broken.
+- Preserve headings and paragraph structure.
+"""
+
+    if translation_mode == "arabic_tafsir":
+        return """
+You are translating a classical Arabic tafsir book into clear natural Uyghur.
+
+Rules:
+- Translate tafsir explanations into respectful Islamic Uyghur.
+- Preserve Qur'an ayat in Arabic.
+- If the text explains an ayah, keep the ayah itself in Arabic and translate the explanation around it.
+- Preserve hadith, Arabic quotations, and key tafsir terms when needed.
+- Keep linguistic, theological, fiqh, and rhetorical discussions accurate.
+- Do not add your own tafsir or outside explanation.
+- Do not simplify scholarly arguments too much.
+- Preserve headings, sections, and issue-by-issue structure.
+"""
+
+    return """
+You are translating a mixed English and Arabic Quranic Arabic study textbook into clear natural Uyghur.
+
+Rules:
+- Translate English explanations into Uyghur.
+- Preserve Arabic grammar terms exactly when instructed.
+- Preserve Qur'anic examples when clean.
+- Keep Arabic examples separate from Uyghur explanation.
+- Use textbook-style Uyghur, not casual speech.
+- Do not add Uyghur suffixes directly onto Arabic words.
+- Do not invent missing Arabic text if the PDF extraction is corrupted.
+"""
 
 def build_translation_prompt(
     *,
@@ -7,12 +76,14 @@ def build_translation_prompt(
     text: str,
     source_language: str,
     target_language: str,
+    translation_mode: str = "mixed_quranic_study",
     source_type: Literal["chapter", "page"],
     source_number: int,
     preserve_arabic_terms: bool = True,
     preserve_quranic_examples: bool = True,
     glossary_terms: str = "",
 ) -> str:
+    translation_mode_instructions = get_translation_mode_instructions(translation_mode)
     arabic_preservation_rule = (
         "Preserve Arabic grammar terms exactly as Arabic script. "
         "Do not translate, transliterate, rewrite, or alter Arabic grammar terms. "
@@ -47,6 +118,14 @@ APPROVED ARABIC TERM GLOSSARY:
         approved_glossary = glossary_terms
 
     return f"""
+Translation mode:
+{translation_mode}
+
+Mode-specific instructions:
+{translation_mode_instructions}
+
+
+
 You are translating a Quranic Arabic study textbook into {target_language}.
 
 TASK:

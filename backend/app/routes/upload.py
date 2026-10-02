@@ -11,6 +11,7 @@ async def upload_document(
     document_title: str = Form(...),
     source_language: str = Form(...),
     target_language: str = Form("Uyghur"),
+    translation_mode: str = Form("mixed_quranic_study"),
     preserve_arabic_terms: bool = Form(True),
     preserve_quranic_examples: bool = Form(True),
 ):
@@ -43,6 +44,7 @@ async def upload_document(
         "filename": file.filename,
         "source_language": source_language,
         "target_language": target_language,
+        "translation_mode": translation_mode,
         "preserve_arabic_terms": preserve_arabic_terms,
         "preserve_quranic_examples": preserve_quranic_examples,
         "page_count": extracted_document.get("page_count", 0),
