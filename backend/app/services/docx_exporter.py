@@ -2,9 +2,9 @@ from datetime import datetime
 from io import BytesIO
 
 from docx import Document
-from docx.enum.section import WD_SECTION
+
 from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.enum.text import WD_BREAK
+
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Inches, Pt
@@ -214,6 +214,68 @@ def build_docx(
     title_paragraph.paragraph_format.space_after = Pt(18)
     add_translation_body(document, translated_text)
 
+
+    if glossary_terms.strip():
+        document.add_page_break()
+        add_rtl_heading(document, "ئاتالغۇلار", level=1)
+
+        for line in glossary_terms.splitlines():
+            stripped_line = line.strip()
+
+            if stripped_line:
+                add_rtl_paragraph(document, stripped_line)
+
+    output = BytesIO()
+    document.save(output)
+    output.seek(0)
+
+    return output
+
+def build_combined_pages_docx(
+    *,
+    title: str,
+    pages: list[dict],
+    review_status: str = "translated",
+    glossary_terms: str = "",
+) -> BytesIO:
+    document = Document()
+
+    set_document_styles(document)
+    set_document_margins(document)
+    add_footer(document.sections[0], "combined pages", 0, review_status)
+
+    title_paragraph = document.add_paragraph()
+    title_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    title_paragraph.paragraph_format.space_after = Pt(18)
+
+    title_run = title_paragraph.add_run(clean_xml_text(title))
+    title_run.bold = True
+    title_run.font.name = "Arial"
+    title_run.font.size = Pt(18)
+
+    sorted_pages = sorted(
+        pages,
+        key=lambda page: int(page.get("page_number", 0)),
+    )
+
+    for index, page in enumerate(sorted_pages):
+        if index > 0:
+            document.add_page_break()
+
+        page_number = page.get("page_number", index + 1)
+        page_title = page.get("title") or f"Page {page_number}"
+        translated_text = page.get("translated_text", "")
+
+        heading_paragraph = document.add_paragraph()
+        heading_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        heading_paragraph.paragraph_format.space_after = Pt(12)
+
+        heading_run = heading_paragraph.add_run(clean_xml_text(page_title))
+        heading_run.bold = True
+        heading_run.font.name = "Arial"
+        heading_run.font.size = Pt(15)
+
+        add_translation_body(document, translated_text)
 
     if glossary_terms.strip():
         document.add_page_break()
